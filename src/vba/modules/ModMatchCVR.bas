@@ -417,9 +417,13 @@ Public Function ScoreCVRGroup(ByVal group As Collection, _
                                ByVal targetTxn As clsTransaction, _
                                ByVal tolerance As Currency) As Double
     ' Compute confidence for a CVR group match.
-    ' Weights: SumAccuracy (50%) + DateClustering (30%) + FragmentCount (20%)
+    '
+    ' Sum accuracy is a HARD GATE, not a weighted score.
+    ' If fragments don't sum within tolerance, score = 0.
+    '
+    ' Scoring: DateClustering (60%) + FragmentPenalty (30%) + TypeCoherence (10%)
 
-    ' Sum accuracy score
+    ' Sum accuracy — GATE
     Dim groupSum As Currency
     groupSum = 0
     Dim minDate As Date, maxDate As Date
@@ -442,43 +446,69 @@ Public Function ScoreCVRGroup(ByVal group As Collection, _
     Dim variance As Currency
     variance = Abs(groupSum - targetTxn.Amount)
 
-    Dim sumScore As Double
-    If variance = 0 Then
-        sumScore = 100#
-    ElseIf variance <= 0.01 Then
-        sumScore = 95#
-    ElseIf variance <= tolerance Then
-        sumScore = 80#
-    Else
-        sumScore = 0#
+    ' Hard gate: must sum within tolerance
+    If variance > tolerance Then
+        ScoreCVRGroup = 0
+        Exit Function
     End If
 
-    ' Date clustering score
+    ' Date clustering score (60% weight)
+    ' Fragments should cluster within 1-2 business days
     Dim dateSpread As Long
     dateSpread = DateDiff("d", minDate, maxDate)
 
+    ' Also check proximity to target date
+    Dim targetProximity As Long
+    targetProximity = Abs(DateDiff("d", minDate, targetTxn.TransactionDate))
+    Dim targetProx2 As Long
+    targetProx2 = Abs(DateDiff("d", maxDate, targetTxn.TransactionDate))
+    If targetProx2 > targetProximity Then targetProximity = targetProx2
+
     Dim dateScore As Double
-    If dateSpread <= 1 Then
+    If dateSpread <= 1 And targetProximity <= 3 Then
         dateScore = 100#
-    ElseIf dateSpread <= 3 Then
-        dateScore = 80#
-    ElseIf dateSpread <= 5 Then
-        dateScore = 60#
+    ElseIf dateSpread <= 3 And targetProximity <= 5 Then
+        dateScore = 85#
+    ElseIf dateSpread <= 5 And targetProximity <= 7 Then
+        dateScore = 65#
+    ElseIf dateSpread <= 7 Then
+        dateScore = 45#
     Else
-        dateScore = 30#
+        dateScore = 20#
     End If
 
-    ' Fragment count score
+    ' Fragment count penalty (30% weight)
+    ' 2 fragments = no penalty, exponential penalty for each additional
     Dim fragScore As Double
     Select Case group.Count
         Case 2: fragScore = 100#
-        Case 3: fragScore = 85#
-        Case 4: fragScore = 65#
-        Case 5: fragScore = 45#
-        Case 6: fragScore = 45#
-        Case Else: fragScore = 30#
+        Case 3: fragScore = 70#
+        Case 4: fragScore = 40#
+        Case Else: fragScore = 15#  ' 5+ fragments = almost certainly coincidental
     End Select
 
+    ' Type coherence (10% weight)
+    ' Are all fragments the same transaction type? Mixed types = suspicious
+    Dim firstType As String
+    Set frag = group(1)
+    firstType = frag.TypeCode
+    Dim allSameType As Boolean
+    allSameType = True
+    For i = 2 To group.Count
+        Set frag = group(i)
+        If frag.TypeCode <> firstType Then
+            allSameType = False
+            Exit For
+        End If
+    Next i
+
+    Dim typeScore As Double
+    If allSameType Then
+        typeScore = 100#
+    Else
+        typeScore = 50#
+    End If
+
     ' Weighted composite
-    ScoreCVRGroup = Round(sumScore * 0.5 + dateScore * 0.3 + fragScore * 0.2, 2)
+    ScoreCVRGroup = Round(dateScore * 0.6 + fragScore * 0.3 + typeScore * 0.1, 2)
 End Function

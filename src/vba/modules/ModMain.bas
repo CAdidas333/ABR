@@ -108,8 +108,8 @@ Public Sub Step3_RunAutoMatching()
     Dim dmsTxns As Collection
     Set dmsTxns = ModImportDMS.LoadDMSTransactions()
 
-    ' Phase 1: 1:1 matching
-    Application.StatusBar = "ABR: Phase 1 — Running 1:1 matching..."
+    ' Phases -1, 0, 1, 4: Pass rules + scored matching + near-amount
+    Application.StatusBar = "ABR: Running phased matching pipeline..."
     ModMatchEngine.RunMatching bankTxns, dmsTxns
 
     ' Reload to get updated match status

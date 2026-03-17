@@ -179,7 +179,7 @@ End Function
 Public Function MaxCVRFragments() As Long
     Dim val As Long
     val = GetConfigLong("MaxCVRFragments")
-    If val = 0 Then val = 6
+    If val = 0 Then val = 4   ' Cap at 4; beyond this, coincidental sums are likely
     MaxCVRFragments = val
 End Function
 
