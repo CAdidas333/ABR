@@ -1,3 +1,4 @@
+Attribute VB_Name = "ModHelpers"
 '===============================================================================
 ' ModHelpers — Utility Functions
 '

@@ -1,3 +1,4 @@
+Attribute VB_Name = "ModOutstanding"
 '===============================================================================
 ' ModOutstanding — Outstanding Items Carry-Forward
 '

@@ -1,3 +1,4 @@
+Attribute VB_Name = "ModImportBank"
 '===============================================================================
 ' ModImportBank — Bank Statement Import
 '

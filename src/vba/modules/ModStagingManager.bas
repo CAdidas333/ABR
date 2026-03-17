@@ -1,3 +1,4 @@
+Attribute VB_Name = "ModStagingManager"
 '===============================================================================
 ' ModStagingManager — Match Staging and Review Workflow
 '

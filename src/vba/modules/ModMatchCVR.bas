@@ -1,3 +1,4 @@
+Attribute VB_Name = "ModMatchCVR"
 '===============================================================================
 ' ModMatchCVR — CVR Many-to-One and Split Transaction Matching
 '
