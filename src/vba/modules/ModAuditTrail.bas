@@ -1,4 +1,3 @@
-Attribute VB_Name = "ModAuditTrail"
 '===============================================================================
 ' ModAuditTrail — Audit Trail Logging
 '

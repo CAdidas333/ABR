@@ -1,4 +1,3 @@
-Attribute VB_Name = "ModConfig"
 '===============================================================================
 ' ModConfig — Configuration Management
 '

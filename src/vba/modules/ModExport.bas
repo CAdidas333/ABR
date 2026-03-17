@@ -1,4 +1,3 @@
-Attribute VB_Name = "ModExport"
 '===============================================================================
 ' ModExport — Finalization and Report Export
 '

@@ -1,4 +1,3 @@
-Attribute VB_Name = "ModMatchEngine"
 '===============================================================================
 ' ModMatchEngine — Core Matching Algorithm
 '

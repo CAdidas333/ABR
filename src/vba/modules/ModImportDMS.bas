@@ -1,4 +1,3 @@
-Attribute VB_Name = "ModImportDMS"
 '===============================================================================
 ' ModImportDMS — R&R DMS GL Export Import
 '
