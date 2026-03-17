@@ -39,7 +39,8 @@
         {"header": "Reference Number", "width": 16, "format": "text"},
         {"header": "Amount", "width": 14, "format": "currency"},
         {"header": "Type Code", "width": 12, "format": "text"},
-        {"header": "GL Account", "width": 14, "format": "text"},
+        {"header": "SRC", "width": 6, "format": "text"},
+        {"header": "Check Number", "width": 14, "format": "text"},
         {"header": "Import Timestamp", "width": 20, "format": "datetime"},
         {"header": "Is Matched", "width": 10, "format": "boolean"},
         {"header": "Match ID", "width": 10, "format": "integer"},
@@ -155,31 +156,23 @@
       "freeze_pane": null,
       "columns": [],
       "dms_type_codes": [
-        {"code": "CHK", "description": "Check payment"},
-        {"code": "DEP", "description": "Deposit"},
-        {"code": "CVR", "description": "Customer Vehicle Receivable"},
-        {"code": "ACH", "description": "ACH transfer"},
-        {"code": "WIR", "description": "Wire transfer"},
-        {"code": "FEE", "description": "Bank fee / service charge"},
-        {"code": "INT", "description": "Interest"},
-        {"code": "ADJ", "description": "Adjustment"},
-        {"code": "PAY", "description": "Payroll"},
-        {"code": "TAX", "description": "Tax payment"},
-        {"code": "INS", "description": "Insurance payment"},
-        {"code": "RNT", "description": "Rent payment"},
-        {"code": "UTL", "description": "Utility payment"},
-        {"code": "VND", "description": "Vendor payment"},
-        {"code": "OTH", "description": "Other"}
+        {"code": "CHK", "description": "Check payment (SRC 6, numeric reference)"},
+        {"code": "CASH", "description": "Cash/deposit batch (SRC 5, CA prefix)"},
+        {"code": "CKBATCH", "description": "Check batch (SRC 5, CK prefix)"},
+        {"code": "VENDOR", "description": "Vendor/wire batch (SRC 5, V prefix)"},
+        {"code": "BATCH", "description": "Other batch transaction (SRC 5)"},
+        {"code": "FINDEP", "description": "Finance deposit (SRC 11)"},
+        {"code": "30", "description": "Type 30 transaction"}
       ]
     }
   },
   "locations": [
-    {"code": "JCC", "name": "Jim Coleman Cadillac", "bank": "BOFA"},
-    {"code": "JCH", "name": "Jim Coleman Honda", "bank": "BOFA"},
-    {"code": "JCI", "name": "Jim Coleman Infiniti", "bank": "BOFA"},
-    {"code": "JCL", "name": "Jim Coleman Lexus", "bank": "TRUIST"},
-    {"code": "JCV", "name": "Jim Coleman Volvo", "bank": "TRUIST"},
-    {"code": "JCA", "name": "Jim Coleman Acura", "bank": "BOFA"},
-    {"code": "JCJ", "name": "Jim Coleman Jaguar Land Rover", "bank": "TRUIST"}
+    {"code": "CAD", "name": "Jim Coleman Cadillac", "bank": "BOFA"},
+    {"code": "TOY", "name": "Jim Coleman Toyota", "bank": "BOFA"},
+    {"code": "NIB", "name": "Jim Coleman Nissan Infiniti Bethesda", "bank": "BOFA"},
+    {"code": "NSS", "name": "Jim Coleman Nissan Silver Spring", "bank": "BOFA"},
+    {"code": "NEC", "name": "Jim Coleman Nissan Ellicott City", "bank": "BOFA"},
+    {"code": "HON", "name": "Jim Coleman Honda", "bank": "BOFA"},
+    {"code": "JLR", "name": "Jim Coleman Jaguar Land Rover", "bank": "BOFA"}
   ]
 }

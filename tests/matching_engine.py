@@ -11,9 +11,14 @@ import csv
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from itertools import combinations
 from typing import Optional
+
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
 
 
 # ---------------------------------------------------------------------------
@@ -547,7 +552,7 @@ def run_reverse_split_matching(unmatched_bank: list[Transaction],
 
 
 # ---------------------------------------------------------------------------
-# CSV Parsers
+# CSV / XLSX Parsers — Real-World Formats
 # ---------------------------------------------------------------------------
 
 def extract_check_number(description: str) -> str:
@@ -566,41 +571,110 @@ def extract_check_number(description: str) -> str:
     return ""
 
 
+def _parse_amount(val: str) -> Optional[float]:
+    """Parse a dollar amount string, handling commas, quotes, parens, dollar signs."""
+    if not val or not val.strip():
+        return None
+    cleaned = val.strip().replace('"', '').replace('$', '').replace(',', '').replace(' ', '')
+    if cleaned.startswith('(') and cleaned.endswith(')'):
+        cleaned = '-' + cleaned[1:-1]
+    try:
+        return float(cleaned)
+    except ValueError:
+        return None
+
+
+def _parse_check_date(date_str: str, statement_year: int = 2025) -> Optional[date]:
+    """Parse dates in D-Mon format (e.g., '16-May', '2-May') used in BofA Checks section."""
+    date_str = date_str.strip().replace('*', '')
+    # Try D-Mon format (Checks section)
+    try:
+        parsed = datetime.strptime(date_str, '%d-%b')
+        return parsed.replace(year=statement_year).date()
+    except ValueError:
+        pass
+    # Try M/D/YYYY format (Deposits/Withdrawals section)
+    try:
+        return datetime.strptime(date_str, '%m/%d/%Y').date()
+    except ValueError:
+        pass
+    return None
+
+
 def parse_bofa_csv(filepath: str) -> list[Transaction]:
-    """Parse Bank of America CSV export."""
+    """
+    Parse Bank of America COMMERCIAL bank statement CSV.
+
+    Real format is sectioned:
+      Row 1: Statement Information header
+      Row 2: Account Summary
+      Section "Deposits and other credits": Type, Date(M/D/YYYY), DepID, Amount, Description, Ref
+      Section "Withdrawals and other Debits": Type, Date(M/D/YYYY), empty, Amount(neg), Description, Ref
+      Section "Checks": Type, Date(D-Mon), CheckNum(*), Amount(neg), empty, Ref
+      Section "Daily Ledger Balances": skip
+    """
     transactions = []
     txn_id = 1
 
     with open(filepath, 'r', newline='', encoding='utf-8-sig') as f:
-        reader = csv.DictReader(f)
+        reader = csv.reader(f)
         for row in reader:
-            date_str = row.get('Date', '').strip()
-            desc = row.get('Description', '').strip()
-            amount_str = row.get('Amount', '0').strip().replace(',', '')
-            balance_str = row.get('Running Balance', '0').strip().replace(',', '')
-
-            try:
-                txn_date = datetime.strptime(date_str, '%m/%d/%Y').date()
-            except ValueError:
-                try:
-                    txn_date = datetime.strptime(date_str, '%Y-%m-%d').date()
-                except ValueError:
-                    continue
-
-            try:
-                amount = float(amount_str)
-            except ValueError:
+            if len(row) < 5:
                 continue
 
-            check_num = extract_check_number(desc)
+            section = row[0].strip()
+
+            # Skip non-transaction rows
+            if section in ('Statement Information', 'Account Summary',
+                           'Daily Ledger Balances', ''):
+                continue
+
+            date_str = row[1].strip() if len(row) > 1 else ''
+            col3 = row[2].strip() if len(row) > 2 else ''
+            amount_str = row[3].strip() if len(row) > 3 else ''
+            description = row[4].strip() if len(row) > 4 else ''
+
+            # Parse date — Checks use D-Mon, others use M/D/YYYY
+            txn_date = _parse_check_date(date_str)
+            if txn_date is None:
+                continue
+
+            # Parse amount
+            amount = _parse_amount(amount_str)
+            if amount is None:
+                continue
+
+            check_number = ''
+            txn_type = ''
+
+            if section == 'Deposits and other credits':
+                txn_type = 'DEP'
+                # col3 is deposit ID (often "1" for preencoded) — not a check number
+            elif section == 'Withdrawals and other Debits':
+                txn_type = 'WDR'
+                # amount should already be negative
+            elif section == 'Checks':
+                txn_type = 'CHK'
+                # col3 is the check number (may have * suffix)
+                check_number = col3.replace('*', '').strip()
+                # Checks should be negative
+                if amount > 0:
+                    amount = -amount
+            else:
+                continue
+
+            # Extract check number from description if not already found
+            if not check_number:
+                check_number = extract_check_number(description)
 
             txn = Transaction(
                 transaction_id=txn_id,
                 source="BANK",
                 transaction_date=txn_date,
-                description=desc,
+                description=description if description else section,
                 amount=amount,
-                check_number=check_num,
+                check_number=check_number,
+                type_code=txn_type,
                 bank_source="BOFA",
             )
             transactions.append(txn)
@@ -610,7 +684,7 @@ def parse_bofa_csv(filepath: str) -> list[Transaction]:
 
 
 def parse_truist_csv(filepath: str) -> list[Transaction]:
-    """Parse Truist CSV export."""
+    """Parse Truist CSV export (Debit/Credit columns)."""
     transactions = []
     txn_id = 1
 
@@ -630,8 +704,6 @@ def parse_truist_csv(filepath: str) -> list[Transaction]:
                 except ValueError:
                     continue
 
-            # Truist uses separate debit/credit columns
-            # Debits are outflows (negative), credits are inflows (positive)
             if debit_str:
                 try:
                     amount = -abs(float(debit_str))
@@ -662,11 +734,120 @@ def parse_truist_csv(filepath: str) -> list[Transaction]:
     return transactions
 
 
-def parse_dms_csv(filepath: str) -> list[Transaction]:
-    """Parse R&R DMS GL export CSV."""
+def _excel_serial_to_date(serial: int) -> date:
+    """Convert Excel date serial number to Python date."""
+    # Excel epoch: 1899-12-30 (with the Lotus 1-2-3 bug for 1900-02-29)
+    excel_epoch = date(1899, 12, 30)
+    return excel_epoch + timedelta(days=int(serial))
+
+
+def parse_dms_xlsx(filepath: str) -> list[Transaction]:
+    """
+    Parse R&R DMS GL export in XLSX format.
+
+    Real format (9 columns):
+      SRC | Reference# | Date | Port | Control# | Debit Amount | Credit Amount | Name | Description
+
+    SRC codes: 5=batch, 6=checks/individual, 11=finance deposits
+    Debit Amount = positive (money in), Credit Amount = negative (money out)
+    """
+    if openpyxl is None:
+        raise ImportError("openpyxl required for xlsx parsing")
+
     transactions = []
     txn_id = 1
 
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    ws = wb.active
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            continue
+
+        src = str(row[0]).strip()
+        reference = str(row[1]).strip() if row[1] else ''
+        txn_date_raw = row[2]
+        port = str(row[3]).strip() if row[3] else ''
+        control = str(row[4]).strip() if row[4] else ''
+        debit_amt = row[5]
+        credit_amt = row[6]
+        name = str(row[7]).strip() if row[7] else ''
+        description = str(row[8]).strip() if row[8] else ''
+
+        # Parse date
+        if isinstance(txn_date_raw, datetime):
+            txn_date = txn_date_raw.date()
+        elif isinstance(txn_date_raw, date):
+            txn_date = txn_date_raw
+        else:
+            continue
+
+        # Combine debit/credit into single amount
+        # Debit = positive (money received), Credit = negative (money paid out)
+        amount = 0.0
+        if debit_amt is not None and debit_amt != '' and debit_amt != 0:
+            amount = float(debit_amt)
+        elif credit_amt is not None and credit_amt != '' and credit_amt != 0:
+            amount = float(credit_amt)  # Already negative in the data
+        else:
+            continue
+
+        # Determine type code from SRC and reference pattern
+        type_code = ''
+        check_number = ''
+        if src == '6':
+            # SRC 6 = individual transactions (usually checks)
+            type_code = 'CHK'
+            # Reference is the check number for SRC=6
+            check_match = re.match(r'^(\d{3,8}[A-Z]?)$', reference)
+            if check_match:
+                # Strip any trailing letter suffix (e.g., "231557A")
+                check_number = re.match(r'^(\d+)', reference).group(1)
+        elif src == '5':
+            # SRC 5 = batch transactions
+            if reference.startswith('CA'):
+                type_code = 'CASH'
+            elif reference.startswith('CK'):
+                type_code = 'CKBATCH'
+            elif reference.startswith('V'):
+                type_code = 'VENDOR'
+            else:
+                type_code = 'BATCH'
+        elif src == '11':
+            type_code = 'FINDEP'
+        else:
+            type_code = src
+
+        # Build description from name + description fields
+        full_desc = name
+        if description:
+            full_desc = f"{name} - {description}" if name else description
+
+        txn = Transaction(
+            transaction_id=txn_id,
+            source="DMS",
+            transaction_date=txn_date,
+            description=full_desc,
+            amount=amount,
+            check_number=check_number,
+            reference_number=reference,
+            type_code=type_code,
+        )
+        transactions.append(txn)
+        txn_id += 1
+
+    wb.close()
+    return transactions
+
+
+def parse_dms_csv(filepath: str) -> list[Transaction]:
+    """Parse R&R DMS GL export — dispatches to xlsx or csv parser."""
+    if filepath.endswith('.xlsx') or filepath.endswith('.xls'):
+        return parse_dms_xlsx(filepath)
+
+    # Legacy CSV fallback for test data
+    transactions = []
+    txn_id = 1
     with open(filepath, 'r', newline='', encoding='utf-8-sig') as f:
         reader = csv.DictReader(f)
         for row in reader:
@@ -675,7 +856,6 @@ def parse_dms_csv(filepath: str) -> list[Transaction]:
             ref = row.get('Reference', '').strip()
             amount_str = row.get('Amount', '0').strip().replace(',', '')
             type_code = row.get('Type Code', '').strip()
-
             try:
                 txn_date = datetime.strptime(date_str, '%m/%d/%Y').date()
             except ValueError:
@@ -683,47 +863,95 @@ def parse_dms_csv(filepath: str) -> list[Transaction]:
                     txn_date = datetime.strptime(date_str, '%Y-%m-%d').date()
                 except ValueError:
                     continue
-
             try:
                 amount = float(amount_str)
             except ValueError:
                 continue
-
-            # For check-type DMS entries, the reference IS the check number
             check_num = ""
             if type_code == "CHK":
-                # Reference might be the check number directly
                 check_match = re.search(r'(\d{3,8})', ref)
                 if check_match:
                     check_num = check_match.group(1)
-
             txn = Transaction(
-                transaction_id=txn_id,
-                source="DMS",
-                transaction_date=txn_date,
-                description=desc,
-                amount=amount,
-                check_number=check_num,
-                reference_number=ref,
-                type_code=type_code,
+                transaction_id=txn_id, source="DMS", transaction_date=txn_date,
+                description=desc, amount=amount, check_number=check_num,
+                reference_number=ref, type_code=type_code,
             )
             transactions.append(txn)
             txn_id += 1
+    return transactions
 
+
+def parse_outstanding_xlsx(filepath: str) -> list[Transaction]:
+    """
+    Parse outstanding checks XLSX file.
+
+    Format: Check# | Bank Code | Check Date | Amount | Payee | Cancel Date
+    Check Date is Excel serial number. Cancel Date is serial or None.
+    Returns only checks that are STILL outstanding (no Cancel Date).
+    """
+    if openpyxl is None:
+        raise ImportError("openpyxl required for xlsx parsing")
+
+    transactions = []
+    txn_id = 1
+
+    wb = openpyxl.load_workbook(filepath, data_only=True)
+    ws = wb.active
+
+    for row in ws.iter_rows(min_row=2, values_only=True):
+        if row[0] is None:
+            continue
+
+        check_num = str(int(row[0])) if isinstance(row[0], (int, float)) else str(row[0])
+        check_date_raw = row[2]
+        amount = row[3]
+        payee = str(row[4]) if row[4] else ''
+        cancel_date = row[5]
+
+        # Parse check date (Excel serial number)
+        if isinstance(check_date_raw, (int, float)):
+            txn_date = _excel_serial_to_date(int(check_date_raw))
+        elif isinstance(check_date_raw, datetime):
+            txn_date = check_date_raw.date()
+        elif isinstance(check_date_raw, date):
+            txn_date = check_date_raw
+        else:
+            continue
+
+        if amount is None:
+            continue
+
+        # Track whether this check has cleared
+        is_cleared = cancel_date is not None
+
+        txn = Transaction(
+            transaction_id=txn_id,
+            source="OUTSTANDING",
+            transaction_date=txn_date,
+            description=payee,
+            amount=-abs(float(amount)),  # Outstanding checks are outflows (negative)
+            check_number=check_num,
+            type_code="CLEARED" if is_cleared else "OUTSTANDING",
+        )
+        transactions.append(txn)
+        txn_id += 1
+
+    wb.close()
     return transactions
 
 
 def detect_bank_format(filepath: str) -> str:
-    """Auto-detect bank CSV format by reading the header row."""
+    """Auto-detect bank CSV format by reading the header/first row."""
     with open(filepath, 'r', encoding='utf-8-sig') as f:
-        header = f.readline().strip().lower()
+        first_line = f.readline().strip().lower()
 
-    if 'debit' in header and 'credit' in header:
-        return "TRUIST"
-    elif 'amount' in header and 'running balance' in header:
+    if 'statement information' in first_line:
         return "BOFA"
-    elif 'amount' in header:
-        return "BOFA"  # Default guess
+    elif 'debit' in first_line and 'credit' in first_line:
+        return "TRUIST"
+    elif 'deposits and other credits' in first_line:
+        return "BOFA"
     else:
         return "UNKNOWN"
 
@@ -734,39 +962,53 @@ def detect_bank_format(filepath: str) -> str:
 
 def run_full_reconciliation(bank_txns: list[Transaction],
                             dms_txns: list[Transaction],
-                            config: MatchConfig | None = None
+                            config: MatchConfig | None = None,
+                            prior_dms_txns: list[Transaction] | None = None,
                             ) -> dict:
     """
     Run the complete reconciliation pipeline:
-    1. 1:1 matching
-    2. CVR many-to-one matching on remaining unmatched
-    3. Reverse split matching on remaining unmatched
+    1. 1:1 matching against current month GL
+    2. 1:1 matching against prior month GL (fallback for carryover)
+    3. CVR many-to-one matching on remaining unmatched
+    4. Reverse split matching on remaining unmatched
 
     Returns a dict with all results.
     """
     if config is None:
         config = MatchConfig()
 
-    # Phase 1: 1:1 matching
+    # Phase 1: 1:1 matching against current month GL
     one_to_one, unmatched_bank, unmatched_dms = run_matching(
         bank_txns, dms_txns, config
     )
 
-    # Phase 2: CVR many-to-one (bank fragments → DMS lump sum)
-    next_id = max((m.match_id for m in one_to_one), default=0) + 1000
+    # Phase 2: Prior-month GL fallback
+    prior_matches = []
+    if prior_dms_txns:
+        prior_one_to_one, unmatched_bank, _ = run_matching(
+            unmatched_bank, prior_dms_txns, config
+        )
+        # Tag as prior-period matches
+        for m in prior_one_to_one:
+            m.match_type = "PRIOR_PERIOD"
+        prior_matches = prior_one_to_one
+
+    # Phase 3: CVR many-to-one (bank fragments → DMS lump sum)
+    all_so_far = one_to_one + prior_matches
+    next_id = max((m.match_id for m in all_so_far), default=0) + 1000
     cvr_matches = run_cvr_matching(
         unmatched_bank, unmatched_dms, config,
         next_match_id=next_id
     )
 
-    # Phase 3: Reverse split (DMS fragments → bank lump sum)
+    # Phase 4: Reverse split (DMS fragments → bank lump sum)
     next_id = max((m.match_id for m in cvr_matches), default=next_id) + 1000
     split_matches = run_reverse_split_matching(
         unmatched_bank, unmatched_dms, config,
         next_match_id=next_id
     )
 
-    all_matches = one_to_one + cvr_matches + split_matches
+    all_matches = one_to_one + prior_matches + cvr_matches + split_matches
 
     # Final unmatched
     all_matched_bank_ids = set()
@@ -786,6 +1028,7 @@ def run_full_reconciliation(bank_txns: list[Transaction],
 
     return {
         "one_to_one_matches": one_to_one,
+        "prior_period_matches": prior_matches,
         "cvr_matches": cvr_matches,
         "split_matches": split_matches,
         "all_matches": all_matches,

@@ -2,7 +2,11 @@ Attribute VB_Name = "ModImportDMS"
 '===============================================================================
 ' ModImportDMS — R&R DMS GL Export Import
 '
-' Parses Reynolds & Reynolds DMS GL export CSV files.
+' Parses Reynolds & Reynolds DMS GL export XLSX files.
+' The R&R export has 9 columns:
+'   1=SRC, 2=Reference#, 3=Date, 4=Port, 5=Control#,
+'   6=Debit Amount, 7=Credit Amount, 8=Name, 9=Description
+'
 ' Writes parsed transactions to the DMSData sheet.
 '===============================================================================
 
@@ -24,17 +28,28 @@ Private Const COL_MATCH_ID As Long = 10
 Private Const COL_MATCH_TYPE As Long = 11
 Private Const COL_CONFIDENCE As Long = 12
 
+' R&R source XLSX column positions
+Private Const SRC_COL_SRC As Long = 1
+Private Const SRC_COL_REF As Long = 2
+Private Const SRC_COL_DATE As Long = 3
+Private Const SRC_COL_PORT As Long = 4
+Private Const SRC_COL_CTRL As Long = 5
+Private Const SRC_COL_DEBIT As Long = 6
+Private Const SRC_COL_CREDIT As Long = 7
+Private Const SRC_COL_NAME As Long = 8
+Private Const SRC_COL_DESC As Long = 9
+
 ' ---------------------------------------------------------------------------
 ' Public Entry Point
 ' ---------------------------------------------------------------------------
 
 Public Function ImportDMSExport(Optional ByVal filePath As String = "") As Long
-    ' Import an R&R DMS GL export CSV file.
+    ' Import an R&R DMS GL export XLSX file.
     ' Returns the number of transactions imported.
 
     If filePath = "" Then
         filePath = Application.GetOpenFilename( _
-            FileFilter:="CSV Files (*.csv),*.csv,All Files (*.*),*.*", _
+            FileFilter:="Excel Files (*.xlsx),*.xlsx,All Files (*.*),*.*", _
             Title:="Select R&R DMS GL Export File")
         If filePath = "False" Or filePath = "" Then
             ImportDMSExport = 0
@@ -52,31 +67,40 @@ Public Function ImportDMSExport(Optional ByVal filePath As String = "") As Long
 End Function
 
 ' ---------------------------------------------------------------------------
-' DMS Parser
+' DMS Parser — reads XLSX via Workbooks.Open
 ' ---------------------------------------------------------------------------
 
 Private Function ParseDMSFile(ByVal filePath As String) As Long
-    ' Parse R&R DMS CSV: GL Date, Description, Reference, Amount, Type Code
+    ' Parse R&R DMS XLSX with 9 columns:
+    '   SRC, Reference#, Date, Port, Control#, Debit, Credit, Name, Description
+    '
+    ' Combines Debit/Credit into signed amount and derives TypeCode from
+    ' SRC value and Reference# pattern.
 
-    Dim ws As Worksheet
-    Set ws = ThisWorkbook.Sheets(DMS_SHEET)
+    Dim wsDest As Worksheet
+    Set wsDest = ThisWorkbook.Sheets(DMS_SHEET)
 
     Dim startRow As Long
-    startRow = ModHelpers.GetNextRow(ws, COL_ROW_ID)
+    startRow = ModHelpers.GetNextRow(wsDest, COL_ROW_ID)
 
-    Dim fileNum As Integer
-    fileNum = FreeFile
-    Open filePath For Input As #fileNum
+    ' Open the source workbook read-only
+    Dim wbSrc As Workbook
+    Application.ScreenUpdating = False
+    Set wbSrc = Workbooks.Open(Filename:=filePath, ReadOnly:=True, UpdateLinks:=0)
 
-    ' Skip header
-    Dim headerLine As String
-    Line Input #fileNum, headerLine
+    Dim wsSrc As Worksheet
+    Set wsSrc = wbSrc.ActiveSheet
 
+    ' Find last row in source
+    Dim lastSrcRow As Long
+    lastSrcRow = wsSrc.Cells(wsSrc.Rows.Count, SRC_COL_SRC).End(xlUp).Row
+
+    ' Determine starting row ID
     Dim rowID As Long
     If startRow <= 2 Then
         rowID = 1
     Else
-        rowID = ws.Cells(startRow - 1, COL_ROW_ID).Value + 1
+        rowID = wsDest.Cells(startRow - 1, COL_ROW_ID).Value + 1
     End If
 
     Dim txnCount As Long
@@ -85,100 +109,220 @@ Private Function ParseDMSFile(ByVal filePath As String) As Long
     Dim importTimestamp As Date
     importTimestamp = Now
 
-    Do While Not EOF(fileNum)
-        Dim dataLine As String
-        Line Input #fileNum, dataLine
+    ' Row 1 is typically a header; start from row 2
+    Dim r As Long
+    For r = 2 To lastSrcRow
+        ' Read source columns
+        Dim srcCode As Variant
+        srcCode = wsSrc.Cells(r, SRC_COL_SRC).Value
 
-        If Trim(dataLine) = "" Then GoTo NextLineDMS
+        ' Skip blank rows
+        If IsEmpty(srcCode) Or Trim(CStr(srcCode)) = "" Then GoTo NextRowSrc
 
-        Dim fields() As String
-        fields = ParseCSVLineDMS(dataLine)
-
-        If UBound(fields) < 4 Then GoTo NextLineDMS
+        Dim refRaw As String
+        refRaw = Trim(CStr(wsSrc.Cells(r, SRC_COL_REF).Value))
 
         Dim glDate As Date
-        Dim desc As String
-        Dim refNum As String
-        Dim amount As Currency
-        Dim typeCode As String
-
-        On Error GoTo SkipLineDMS
-        glDate = ModHelpers.ParseDateFlexible(Trim(fields(0)))
-        desc = CleanCSVFieldDMS(fields(1))
-        refNum = Trim(CleanCSVFieldDMS(fields(2)))
-        amount = ModHelpers.NormalizeCurrency(fields(3))
-        typeCode = UCase(Trim(CleanCSVFieldDMS(fields(4))))
+        On Error GoTo SkipRowSrc
+        glDate = CDate(wsSrc.Cells(r, SRC_COL_DATE).Value)
         On Error GoTo 0
 
-        ' Write to sheet
-        ws.Cells(startRow, COL_ROW_ID).Value = rowID
-        ws.Cells(startRow, COL_GL_DATE).Value = glDate
-        ws.Cells(startRow, COL_GL_DATE).NumberFormat = "MM/DD/YYYY"
-        ws.Cells(startRow, COL_DESC).Value = desc
-        ws.Cells(startRow, COL_REF_NUM).Value = refNum
-        ws.Cells(startRow, COL_AMOUNT).Value = amount
-        ws.Cells(startRow, COL_AMOUNT).NumberFormat = "#,##0.00"
-        ws.Cells(startRow, COL_TYPE_CODE).Value = typeCode
-        ws.Cells(startRow, COL_IMPORT_TS).Value = importTimestamp
-        ws.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY HH:MM:SS"
-        ws.Cells(startRow, COL_IS_MATCHED).Value = False
+        Dim portCode As String
+        portCode = Trim(CStr(wsSrc.Cells(r, SRC_COL_PORT).Value))
+
+        Dim ctrlNum As String
+        ctrlNum = Trim(CStr(wsSrc.Cells(r, SRC_COL_CTRL).Value))
+
+        ' --- Combine Debit/Credit into signed amount ---
+        Dim amount As Currency
+        Dim debitVal As Variant
+        Dim creditVal As Variant
+        debitVal = wsSrc.Cells(r, SRC_COL_DEBIT).Value
+        creditVal = wsSrc.Cells(r, SRC_COL_CREDIT).Value
+
+        If Not IsEmpty(debitVal) And debitVal <> "" Then
+            amount = CCur(debitVal)
+        ElseIf Not IsEmpty(creditVal) And creditVal <> "" Then
+            amount = CCur(creditVal)   ' Credit values are already negative
+        Else
+            amount = 0
+        End If
+
+        Dim nameField As String
+        nameField = Trim(CStr(wsSrc.Cells(r, SRC_COL_NAME).Value))
+
+        Dim descField As String
+        descField = Trim(CStr(wsSrc.Cells(r, SRC_COL_DESC).Value))
+
+        ' --- Build combined description ---
+        Dim fullDesc As String
+        If nameField <> "" And descField <> "" Then
+            fullDesc = nameField & " - " & descField
+        ElseIf nameField <> "" Then
+            fullDesc = nameField
+        Else
+            fullDesc = descField
+        End If
+
+        ' --- Derive TypeCode from SRC + Reference# pattern ---
+        Dim typeCode As String
+        Dim srcNum As Long
+        srcNum = CLng(srcCode)
+
+        typeCode = DeriveTypeCode(srcNum, refRaw)
+
+        ' --- Extract clean reference number ---
+        Dim refNum As String
+        refNum = CleanReference(srcNum, refRaw)
+
+        ' --- Write to DMSData sheet ---
+        wsDest.Cells(startRow, COL_ROW_ID).Value = rowID
+        wsDest.Cells(startRow, COL_GL_DATE).Value = glDate
+        wsDest.Cells(startRow, COL_GL_DATE).NumberFormat = "MM/DD/YYYY"
+        wsDest.Cells(startRow, COL_DESC).Value = fullDesc
+        wsDest.Cells(startRow, COL_REF_NUM).Value = refNum
+        wsDest.Cells(startRow, COL_AMOUNT).Value = amount
+        wsDest.Cells(startRow, COL_AMOUNT).NumberFormat = "#,##0.00"
+        wsDest.Cells(startRow, COL_TYPE_CODE).Value = typeCode
+        wsDest.Cells(startRow, COL_GL_ACCT).Value = portCode
+        wsDest.Cells(startRow, COL_IMPORT_TS).Value = importTimestamp
+        wsDest.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+        wsDest.Cells(startRow, COL_IS_MATCHED).Value = False
 
         rowID = rowID + 1
         startRow = startRow + 1
         txnCount = txnCount + 1
-        GoTo NextLineDMS
+        GoTo NextRowSrc
 
-SkipLineDMS:
+SkipRowSrc:
         On Error GoTo 0
 
-NextLineDMS:
-    Loop
+NextRowSrc:
+    Next r
 
-    Close #fileNum
+    ' Close source workbook without saving
+    wbSrc.Close SaveChanges:=False
+    Application.ScreenUpdating = True
+
     ParseDMSFile = txnCount
 End Function
 
 ' ---------------------------------------------------------------------------
-' CSV Parsing Helpers
+' Type Code Derivation
 ' ---------------------------------------------------------------------------
 
-Private Function ParseCSVLineDMS(ByVal csvLine As String) As String()
-    Dim result() As String
-    Dim fieldCount As Long
-    fieldCount = 0
-    Dim inQuotes As Boolean
-    inQuotes = False
-    Dim currentField As String
-    currentField = ""
+Private Function DeriveTypeCode(ByVal srcNum As Long, ByVal refRaw As String) As String
+    ' Derive a transaction type code from the R&R SRC value and
+    ' the Reference# pattern.
+    '
+    ' SRC=6  with numeric ref   -> "CHK"     (individual check)
+    ' SRC=5  with CA prefix     -> "CASH"    (cash batch)
+    ' SRC=5  with CK prefix     -> "CKBATCH" (check batch)
+    ' SRC=5  with V prefix      -> "VENDOR"  (vendor/wire)
+    ' SRC=5  other              -> "BATCH"   (generic batch)
+    ' SRC=11                    -> "FINDEP"  (finance deposit)
+    ' Otherwise                 -> SRC as string
 
-    Dim i As Long
-    For i = 1 To Len(csvLine)
-        Dim ch As String
-        ch = Mid(csvLine, i, 1)
-        If ch = """" Then
-            inQuotes = Not inQuotes
-        ElseIf ch = "," And Not inQuotes Then
-            ReDim Preserve result(0 To fieldCount)
-            result(fieldCount) = currentField
-            fieldCount = fieldCount + 1
-            currentField = ""
-        Else
-            currentField = currentField & ch
-        End If
-    Next i
+    Dim refUpper As String
+    refUpper = UCase(Trim(refRaw))
 
-    ReDim Preserve result(0 To fieldCount)
-    result(fieldCount) = currentField
-    ParseCSVLineDMS = result
+    Select Case srcNum
+        Case 6
+            ' Individual checks — if reference is numeric (possibly with
+            ' a trailing letter suffix), classify as CHK
+            If IsNumericReference(refRaw) Then
+                DeriveTypeCode = "CHK"
+            Else
+                DeriveTypeCode = "CHK"
+            End If
+
+        Case 5
+            ' Batch transactions — classify by reference prefix
+            If Left(refUpper, 2) = "CA" Then
+                DeriveTypeCode = "CASH"
+            ElseIf Left(refUpper, 2) = "CK" Then
+                DeriveTypeCode = "CKBATCH"
+            ElseIf Left(refUpper, 1) = "V" Then
+                DeriveTypeCode = "VENDOR"
+            Else
+                DeriveTypeCode = "BATCH"
+            End If
+
+        Case 11
+            DeriveTypeCode = "FINDEP"
+
+        Case 30
+            DeriveTypeCode = "OTHER"
+
+        Case Else
+            DeriveTypeCode = CStr(srcNum)
+    End Select
 End Function
 
-Private Function CleanCSVFieldDMS(ByVal field As String) As String
-    Dim cleaned As String
-    cleaned = Trim(field)
-    If Left(cleaned, 1) = """" And Right(cleaned, 1) = """" Then
-        cleaned = Mid(cleaned, 2, Len(cleaned) - 2)
+' ---------------------------------------------------------------------------
+' Reference Number Cleaning
+' ---------------------------------------------------------------------------
+
+Private Function CleanReference(ByVal srcNum As Long, ByVal refRaw As String) As String
+    ' For SRC=6 with a numeric reference (possibly with trailing letter
+    ' suffix like "231557A"), strip the trailing letter(s) to get the
+    ' pure check number.
+    ' For other SRC values, return the raw reference as-is.
+
+    Dim ref As String
+    ref = Trim(refRaw)
+
+    If srcNum = 6 Then
+        ' Strip trailing letter suffix from check numbers
+        ref = StripTrailingLetters(ref)
     End If
-    CleanCSVFieldDMS = Trim(cleaned)
+
+    CleanReference = ref
+End Function
+
+Private Function StripTrailingLetters(ByVal s As String) As String
+    ' Remove trailing alphabetic characters from a string.
+    ' E.g., "231557A" -> "231557", "231543" -> "231543"
+    ' Only strips if the core part is numeric.
+
+    Dim i As Long
+    Dim result As String
+    result = s
+
+    If Len(result) = 0 Then
+        StripTrailingLetters = result
+        Exit Function
+    End If
+
+    ' Walk backward, stripping letters
+    Do While Len(result) > 0
+        Dim lastChar As String
+        lastChar = Right(result, 1)
+        If lastChar >= "A" And lastChar <= "Z" Then
+            result = Left(result, Len(result) - 1)
+        ElseIf lastChar >= "a" And lastChar <= "z" Then
+            result = Left(result, Len(result) - 1)
+        Else
+            Exit Do
+        End If
+    Loop
+
+    ' Only use the stripped version if the remainder is numeric
+    If IsNumeric(result) And Len(result) > 0 Then
+        StripTrailingLetters = result
+    Else
+        StripTrailingLetters = s
+    End If
+End Function
+
+Private Function IsNumericReference(ByVal ref As String) As Boolean
+    ' Check if a reference is numeric, possibly with a trailing letter suffix.
+    ' "231543" -> True, "231557A" -> True, "CA051425" -> False
+
+    Dim stripped As String
+    stripped = StripTrailingLetters(Trim(ref))
+
+    IsNumericReference = IsNumeric(stripped) And Len(stripped) > 0
 End Function
 
 ' ---------------------------------------------------------------------------
