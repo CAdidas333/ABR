@@ -15,28 +15,51 @@ Option Explicit
 Public Function ExtractCheckNumber(ByVal desc As String) As String
     ' Extract check number from bank description field.
     ' Patterns: CHECK #NNNN, CHK #NNNN, CHECK NNNN, CK #NNNN
+    ' Uses native VBA string operations (no VBScript.RegExp — not available on macOS).
 
     Dim upperDesc As String
     upperDesc = UCase(Trim(desc))
 
-    Dim patterns As Variant
-    patterns = Array("CHECK\s*#?\s*(\d{3,8})", _
-                     "CHK\s*#?\s*(\d{3,8})", _
-                     "CK\s*#?\s*(\d{3,8})")
-
-    Dim regEx As Object
-    Set regEx = CreateObject("VBScript.RegExp")
-    regEx.IgnoreCase = True
-    regEx.Global = False
+    ' Try each keyword prefix
+    Dim keywords As Variant
+    keywords = Array("CHECK", "CHK", "CK")
 
     Dim i As Long
-    For i = LBound(patterns) To UBound(patterns)
-        regEx.Pattern = patterns(i)
-        If regEx.Test(upperDesc) Then
-            Dim matches As Object
-            Set matches = regEx.Execute(upperDesc)
-            If matches.Count > 0 Then
-                ExtractCheckNumber = matches(0).SubMatches(0)
+    For i = LBound(keywords) To UBound(keywords)
+        Dim pos As Long
+        pos = InStr(upperDesc, keywords(i))
+        If pos > 0 Then
+            ' Move past the keyword
+            Dim startPos As Long
+            startPos = pos + Len(keywords(i))
+
+            ' Skip optional whitespace, #, and more whitespace
+            Do While startPos <= Len(upperDesc)
+                Dim ch As String
+                ch = Mid(upperDesc, startPos, 1)
+                If ch = " " Or ch = "#" Or ch = Chr(9) Then
+                    startPos = startPos + 1
+                Else
+                    Exit Do
+                End If
+            Loop
+
+            ' Now extract consecutive digits (3-8 digits = valid check number)
+            Dim numStart As Long
+            numStart = startPos
+            Do While startPos <= Len(upperDesc)
+                ch = Mid(upperDesc, startPos, 1)
+                If ch >= "0" And ch <= "9" Then
+                    startPos = startPos + 1
+                Else
+                    Exit Do
+                End If
+            Loop
+
+            Dim numLen As Long
+            numLen = startPos - numStart
+            If numLen >= 3 And numLen <= 8 Then
+                ExtractCheckNumber = Mid(upperDesc, numStart, numLen)
                 Exit Function
             End If
         End If
@@ -51,32 +74,36 @@ End Function
 
 Public Function CleanDescription(ByVal desc As String) As String
     ' Normalize a description for comparison.
+    ' Uses native VBA string operations (no VBScript.RegExp — not available on macOS).
     Dim cleaned As String
     cleaned = UCase(Trim(desc))
 
-    ' Collapse multiple spaces
-    Dim regEx As Object
-    Set regEx = CreateObject("VBScript.RegExp")
-    regEx.Global = True
+    ' Collapse multiple spaces using a loop
+    Do While InStr(cleaned, "  ") > 0
+        cleaned = Replace(cleaned, "  ", " ")
+    Loop
 
-    regEx.Pattern = "\s+"
-    cleaned = regEx.Replace(cleaned, " ")
+    ' Replace tabs with spaces
+    cleaned = Replace(cleaned, Chr(9), " ")
 
-    ' Remove common noise words
+    ' Remove common noise words (space-delimited to avoid partial word matches)
     Dim noiseWords As Variant
-    noiseWords = Array("THE", "A", "AN", "FOR", "OF", "TO", "IN", "ON", "AT")
+    noiseWords = Array(" THE ", " A ", " AN ", " FOR ", " OF ", " TO ", " IN ", " ON ", " AT ")
+
+    ' Pad with spaces for boundary matching
+    cleaned = " " & cleaned & " "
 
     Dim i As Long
     For i = LBound(noiseWords) To UBound(noiseWords)
-        regEx.Pattern = "\b" & noiseWords(i) & "\b"
-        cleaned = regEx.Replace(cleaned, "")
+        cleaned = Replace(cleaned, noiseWords(i), " ")
     Next i
 
-    ' Final cleanup
-    regEx.Pattern = "\s+"
-    cleaned = Trim(regEx.Replace(cleaned, " "))
+    ' Final cleanup — collapse spaces again and trim
+    Do While InStr(cleaned, "  ") > 0
+        cleaned = Replace(cleaned, "  ", " ")
+    Loop
 
-    CleanDescription = cleaned
+    CleanDescription = Trim(cleaned)
 End Function
 
 Public Function LevenshteinDistance(ByVal s1 As String, ByVal s2 As String) As Long

@@ -325,6 +325,44 @@ Private Function IsNumericReference(ByVal ref As String) As Boolean
     IsNumericReference = IsNumeric(stripped) And Len(stripped) > 0
 End Function
 
+Private Function ExtractDigits(ByVal s As String, ByVal minLen As Long, _
+                                ByVal maxLen As Long) As String
+    ' Extract first run of consecutive digits from a string.
+    ' Returns empty string if the digit run is outside minLen..maxLen range.
+    Dim i As Long
+    Dim numStart As Long
+    numStart = 0
+
+    For i = 1 To Len(s)
+        Dim ch As String
+        ch = Mid(s, i, 1)
+        If ch >= "0" And ch <= "9" Then
+            If numStart = 0 Then numStart = i
+        Else
+            If numStart > 0 Then
+                Dim numLen As Long
+                numLen = i - numStart
+                If numLen >= minLen And numLen <= maxLen Then
+                    ExtractDigits = Mid(s, numStart, numLen)
+                    Exit Function
+                End If
+                numStart = 0
+            End If
+        End If
+    Next i
+
+    ' Check if string ends with digits
+    If numStart > 0 Then
+        numLen = Len(s) - numStart + 1
+        If numLen >= minLen And numLen <= maxLen Then
+            ExtractDigits = Mid(s, numStart, numLen)
+            Exit Function
+        End If
+    End If
+
+    ExtractDigits = ""
+End Function
+
 ' ---------------------------------------------------------------------------
 ' Load DMS Transactions into Collection
 ' ---------------------------------------------------------------------------
@@ -359,15 +397,9 @@ Public Function LoadDMSTransactions() As Collection
         txn.SheetRow = i
 
         ' For CHK type, extract check number from reference
+        ' Uses native VBA (no VBScript.RegExp — not available on macOS)
         If txn.TypeCode = "CHK" Then
-            Dim regEx As Object
-            Set regEx = CreateObject("VBScript.RegExp")
-            regEx.Pattern = "(\d{3,8})"
-            If regEx.Test(txn.ReferenceNumber) Then
-                Dim matches As Object
-                Set matches = regEx.Execute(txn.ReferenceNumber)
-                txn.CheckNumber = matches(0).SubMatches(0)
-            End If
+            txn.CheckNumber = ExtractDigits(txn.ReferenceNumber, 3, 8)
         End If
 
         If Not IsEmpty(ws.Cells(i, COL_MATCH_ID).Value) Then

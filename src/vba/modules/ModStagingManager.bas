@@ -105,7 +105,7 @@ Public Sub AcceptMatch(ByVal matchID As Long)
     wsRecon.Cells(nextReconRow, 8).Value = wsStaged.Cells(matchRow, COL_DMS_IDS).Value
     wsRecon.Cells(nextReconRow, 9).Value = wsStaged.Cells(matchRow, COL_DMS_DATE).Value
     wsRecon.Cells(nextReconRow, 9).NumberFormat = "MM/DD/YYYY"
-    wsRecon.Cells(nextReconRow, 10).Value = wsStaged.Cells(matchRow, COL_BANK_DESC).Value
+    wsRecon.Cells(nextReconRow, 10).Value = wsStaged.Cells(matchRow, COL_DMS_DESC).Value
     wsRecon.Cells(nextReconRow, 11).Value = wsStaged.Cells(matchRow, COL_DMS_AMOUNT).Value
     wsRecon.Cells(nextReconRow, 11).NumberFormat = "#,##0.00"
     wsRecon.Cells(nextReconRow, 12).Value = Now
