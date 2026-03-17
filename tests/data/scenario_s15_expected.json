@@ -1,0 +1,32 @@
+{
+  "scenario_id": "s15",
+  "description": "Round dollar amounts with multiple duplicates",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 4,
+    "matches": [
+      {
+        "bank_idx": 0,
+        "dms_idx": 0,
+        "confidence_min": 95
+      },
+      {
+        "bank_idx": 1,
+        "dms_idx": 1,
+        "confidence_min": 95
+      },
+      {
+        "bank_idx": 2,
+        "dms_idx": 2,
+        "confidence_min": 95
+      },
+      {
+        "bank_idx": 3,
+        "dms_idx": 3,
+        "confidence_min": 95
+      }
+    ],
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

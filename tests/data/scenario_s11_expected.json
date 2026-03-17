@@ -1,0 +1,13 @@
+{
+  "scenario_id": "s11",
+  "description": "CVR ambiguous - two possible groupings",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 0,
+    "one_to_one_matches": 0,
+    "cvr_matches_min": 2,
+    "note": "Multiple valid groupings should be surfaced for controller review",
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

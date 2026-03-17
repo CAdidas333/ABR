@@ -1,0 +1,10 @@
+{
+  "scenario_id": "s20",
+  "description": "Orphan DMS transaction - no bank match",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 0,
+    "unmatched_bank": 0,
+    "unmatched_dms": 1
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "scenario_id": "s07",
+  "description": "Duplicate dollar amount, no check numbers",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 2,
+    "matches": [
+      {
+        "bank_idx": 0,
+        "dms_idx": 0,
+        "type": "ONE_TO_ONE",
+        "confidence_min": 70,
+        "confidence_max": 85
+      },
+      {
+        "bank_idx": 1,
+        "dms_idx": 1,
+        "type": "ONE_TO_ONE",
+        "confidence_min": 70,
+        "confidence_max": 85
+      }
+    ],
+    "note": "Both should be flagged as duplicate-amount matches for careful review",
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

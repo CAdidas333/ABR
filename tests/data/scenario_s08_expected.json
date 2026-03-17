@@ -1,0 +1,23 @@
+{
+  "scenario_id": "s08",
+  "description": "CVR 2-fragment - bank splits DMS entry",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 0,
+    "one_to_one_matches": 0,
+    "cvr_matches": 1,
+    "cvr_groups": [
+      {
+        "bank_indices": [
+          0,
+          1
+        ],
+        "dms_idx": 0,
+        "sum": 10000.0,
+        "confidence_min": 75
+      }
+    ],
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

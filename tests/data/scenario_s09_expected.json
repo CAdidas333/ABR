@@ -1,0 +1,24 @@
+{
+  "scenario_id": "s09",
+  "description": "CVR 3-fragment",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 0,
+    "one_to_one_matches": 0,
+    "cvr_matches": 1,
+    "cvr_groups": [
+      {
+        "bank_indices": [
+          0,
+          1,
+          2
+        ],
+        "dms_idx": 0,
+        "sum": 15847.23,
+        "confidence_min": 70
+      }
+    ],
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "scenario_id": "s12",
+  "description": "Reverse split - 1 bank, 2 DMS",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 0,
+    "one_to_one_matches": 0,
+    "split_matches": 1,
+    "split_groups": [
+      {
+        "bank_idx": 0,
+        "dms_indices": [
+          0,
+          1
+        ],
+        "sum": 12400.0
+      }
+    ],
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "scenario_id": "s05",
+  "description": "Amount match, date 7 days apart - low confidence",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 1,
+    "matches": [
+      {
+        "bank_idx": 0,
+        "dms_idx": 0,
+        "type": "ONE_TO_ONE",
+        "confidence_min": 40,
+        "confidence_max": 60
+      }
+    ],
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

@@ -1,0 +1,185 @@
+{
+  "workbook": {
+    "title": "ABR - Auto Bank Reconciliation",
+    "author": "Jim Coleman Automotive"
+  },
+  "sheets": {
+    "Dashboard": {
+      "tab_color": "1F4E79",
+      "columns": [],
+      "freeze_pane": null,
+      "description": "Main menu, workflow status, summary statistics"
+    },
+    "BankData": {
+      "tab_color": "2E75B6",
+      "freeze_pane": "A2",
+      "columns": [
+        {"header": "Row ID", "width": 8, "format": "integer"},
+        {"header": "Transaction Date", "width": 14, "format": "date"},
+        {"header": "Post Date", "width": 14, "format": "date"},
+        {"header": "Description", "width": 45, "format": "text"},
+        {"header": "Amount", "width": 14, "format": "currency"},
+        {"header": "Check Number", "width": 14, "format": "text"},
+        {"header": "Running Balance", "width": 14, "format": "currency"},
+        {"header": "Bank Source", "width": 12, "format": "text"},
+        {"header": "Import Timestamp", "width": 20, "format": "datetime"},
+        {"header": "Is Matched", "width": 10, "format": "boolean"},
+        {"header": "Match ID", "width": 10, "format": "integer"},
+        {"header": "Match Type", "width": 16, "format": "text"},
+        {"header": "Confidence", "width": 12, "format": "percent"}
+      ]
+    },
+    "DMSData": {
+      "tab_color": "548235",
+      "freeze_pane": "A2",
+      "columns": [
+        {"header": "Row ID", "width": 8, "format": "integer"},
+        {"header": "GL Date", "width": 14, "format": "date"},
+        {"header": "Description", "width": 45, "format": "text"},
+        {"header": "Reference Number", "width": 16, "format": "text"},
+        {"header": "Amount", "width": 14, "format": "currency"},
+        {"header": "Type Code", "width": 12, "format": "text"},
+        {"header": "GL Account", "width": 14, "format": "text"},
+        {"header": "Import Timestamp", "width": 20, "format": "datetime"},
+        {"header": "Is Matched", "width": 10, "format": "boolean"},
+        {"header": "Match ID", "width": 10, "format": "integer"},
+        {"header": "Match Type", "width": 16, "format": "text"},
+        {"header": "Confidence", "width": 12, "format": "percent"}
+      ]
+    },
+    "StagedMatches": {
+      "tab_color": "ED7D31",
+      "freeze_pane": "A2",
+      "columns": [
+        {"header": "Match ID", "width": 10, "format": "integer"},
+        {"header": "Match Type", "width": 18, "format": "text"},
+        {"header": "Confidence", "width": 12, "format": "percent"},
+        {"header": "Bank Row ID(s)", "width": 14, "format": "text"},
+        {"header": "Bank Date", "width": 14, "format": "date"},
+        {"header": "Bank Description", "width": 40, "format": "text"},
+        {"header": "Bank Amount", "width": 14, "format": "currency"},
+        {"header": "DMS Row ID(s)", "width": 14, "format": "text"},
+        {"header": "DMS Date", "width": 14, "format": "date"},
+        {"header": "DMS Description", "width": 40, "format": "text"},
+        {"header": "DMS Amount", "width": 14, "format": "currency"},
+        {"header": "Amount Diff", "width": 14, "format": "currency"},
+        {"header": "Date Diff (Days)", "width": 10, "format": "integer"},
+        {"header": "Check # Match", "width": 10, "format": "text"},
+        {"header": "Score Breakdown", "width": 50, "format": "text"},
+        {"header": "Status", "width": 12, "format": "text"},
+        {"header": "Action Timestamp", "width": 20, "format": "datetime"},
+        {"header": "Action By", "width": 16, "format": "text"},
+        {"header": "Reject Reason", "width": 40, "format": "text"}
+      ]
+    },
+    "Reconciled": {
+      "tab_color": "70AD47",
+      "freeze_pane": "A2",
+      "columns": [
+        {"header": "Match ID", "width": 10, "format": "integer"},
+        {"header": "Match Type", "width": 18, "format": "text"},
+        {"header": "Confidence", "width": 12, "format": "percent"},
+        {"header": "Bank Row ID(s)", "width": 14, "format": "text"},
+        {"header": "Bank Date", "width": 14, "format": "date"},
+        {"header": "Bank Description", "width": 40, "format": "text"},
+        {"header": "Bank Amount", "width": 14, "format": "currency"},
+        {"header": "DMS Row ID(s)", "width": 14, "format": "text"},
+        {"header": "DMS Date", "width": 14, "format": "date"},
+        {"header": "DMS Description", "width": 40, "format": "text"},
+        {"header": "DMS Amount", "width": 14, "format": "currency"},
+        {"header": "Reconciled Timestamp", "width": 20, "format": "datetime"},
+        {"header": "Reconciled By", "width": 16, "format": "text"}
+      ]
+    },
+    "Outstanding": {
+      "tab_color": "BF8F00",
+      "freeze_pane": "A2",
+      "columns": [
+        {"header": "Item ID", "width": 10, "format": "integer"},
+        {"header": "Source", "width": 10, "format": "text"},
+        {"header": "Original Period", "width": 14, "format": "text"},
+        {"header": "Transaction Date", "width": 14, "format": "date"},
+        {"header": "Description", "width": 45, "format": "text"},
+        {"header": "Amount", "width": 14, "format": "currency"},
+        {"header": "Check/Reference", "width": 16, "format": "text"},
+        {"header": "Type Code", "width": 12, "format": "text"},
+        {"header": "Periods Outstanding", "width": 10, "format": "integer"},
+        {"header": "Notes", "width": 40, "format": "text"}
+      ]
+    },
+    "AuditLog": {
+      "tab_color": "7030A0",
+      "freeze_pane": "A2",
+      "columns": [
+        {"header": "Log ID", "width": 8, "format": "integer"},
+        {"header": "Timestamp", "width": 20, "format": "datetime"},
+        {"header": "User", "width": 16, "format": "text"},
+        {"header": "Location", "width": 20, "format": "text"},
+        {"header": "Event Type", "width": 20, "format": "text"},
+        {"header": "Match ID", "width": 10, "format": "integer"},
+        {"header": "Details", "width": 60, "format": "text"},
+        {"header": "Session ID", "width": 20, "format": "text"}
+      ]
+    },
+    "Config": {
+      "tab_color": "808080",
+      "freeze_pane": null,
+      "columns": [
+        {"header": "Setting", "width": 30, "format": "text"},
+        {"header": "Value", "width": 20, "format": "text"},
+        {"header": "Description", "width": 50, "format": "text"},
+        {"header": "Valid Range", "width": 30, "format": "text"}
+      ],
+      "default_values": [
+        {"setting": "LocationName", "value": "", "description": "Store name", "valid_range": "Text"},
+        {"setting": "LocationCode", "value": "", "description": "3-letter store code", "valid_range": "3 characters"},
+        {"setting": "BankType", "value": "BOFA", "description": "Primary bank (BOFA or TRUIST)", "valid_range": "BOFA, TRUIST"},
+        {"setting": "HighConfidenceThreshold", "value": "85", "description": "Minimum score for high-confidence staging", "valid_range": "70-100"},
+        {"setting": "MediumConfidenceThreshold", "value": "60", "description": "Below this = requires manual review", "valid_range": "40-80"},
+        {"setting": "LowConfidenceThreshold", "value": "40", "description": "Below this = not staged at all", "valid_range": "20-60"},
+        {"setting": "AmountWeight", "value": "0.40", "description": "Weight for amount matching factor", "valid_range": "0.0-1.0"},
+        {"setting": "CheckNumberWeight", "value": "0.25", "description": "Weight for check number factor", "valid_range": "0.0-1.0"},
+        {"setting": "DateProximityWeight", "value": "0.25", "description": "Weight for date proximity factor", "valid_range": "0.0-1.0"},
+        {"setting": "DescriptionWeight", "value": "0.10", "description": "Weight for description similarity factor", "valid_range": "0.0-1.0"},
+        {"setting": "CVRTolerance", "value": "0.01", "description": "Allowed dollar difference for CVR group sum", "valid_range": "0.00-1.00"},
+        {"setting": "DateWindowDays", "value": "7", "description": "Maximum date difference to consider for matching", "valid_range": "3-30"},
+        {"setting": "CurrentMonth", "value": "", "description": "Active reconciliation period (YYYY-MM)", "valid_range": "YYYY-MM format"},
+        {"setting": "AutoStageHighConfidence", "value": "TRUE", "description": "Auto-stage matches above high threshold", "valid_range": "TRUE, FALSE"},
+        {"setting": "MaxCVRFragments", "value": "6", "description": "Maximum fragments in a CVR group", "valid_range": "2-10"},
+        {"setting": "MaxCVRCandidates", "value": "20", "description": "Maximum candidates to consider for CVR subset-sum", "valid_range": "10-50"},
+        {"setting": "CVRTimeoutSeconds", "value": "2", "description": "Timeout for CVR subset-sum search", "valid_range": "1-10"}
+      ]
+    },
+    "Lookups": {
+      "tab_color": "A5A5A5",
+      "freeze_pane": null,
+      "columns": [],
+      "dms_type_codes": [
+        {"code": "CHK", "description": "Check payment"},
+        {"code": "DEP", "description": "Deposit"},
+        {"code": "CVR", "description": "Customer Vehicle Receivable"},
+        {"code": "ACH", "description": "ACH transfer"},
+        {"code": "WIR", "description": "Wire transfer"},
+        {"code": "FEE", "description": "Bank fee / service charge"},
+        {"code": "INT", "description": "Interest"},
+        {"code": "ADJ", "description": "Adjustment"},
+        {"code": "PAY", "description": "Payroll"},
+        {"code": "TAX", "description": "Tax payment"},
+        {"code": "INS", "description": "Insurance payment"},
+        {"code": "RNT", "description": "Rent payment"},
+        {"code": "UTL", "description": "Utility payment"},
+        {"code": "VND", "description": "Vendor payment"},
+        {"code": "OTH", "description": "Other"}
+      ]
+    }
+  },
+  "locations": [
+    {"code": "JCC", "name": "Jim Coleman Cadillac", "bank": "BOFA"},
+    {"code": "JCH", "name": "Jim Coleman Honda", "bank": "BOFA"},
+    {"code": "JCI", "name": "Jim Coleman Infiniti", "bank": "BOFA"},
+    {"code": "JCL", "name": "Jim Coleman Lexus", "bank": "TRUIST"},
+    {"code": "JCV", "name": "Jim Coleman Volvo", "bank": "TRUIST"},
+    {"code": "JCA", "name": "Jim Coleman Acura", "bank": "BOFA"},
+    {"code": "JCJ", "name": "Jim Coleman Jaguar Land Rover", "bank": "TRUIST"}
+  ]
+}

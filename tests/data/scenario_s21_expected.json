@@ -1,0 +1,14 @@
+{
+  "scenario_id": "s21",
+  "description": "Full month simulation",
+  "bank_format": "BOFA",
+  "expected": {
+    "total_bank": 123,
+    "total_dms": 113,
+    "expected_match_rate_min": 80,
+    "expected_match_rate_max": 95,
+    "note": "Full month: 123 bank + 113 DMS transactions",
+    "expected_orphan_bank": 15,
+    "expected_orphan_dms": 10
+  }
+}

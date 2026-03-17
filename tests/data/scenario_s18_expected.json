@@ -1,0 +1,28 @@
+{
+  "scenario_id": "s18",
+  "description": "Bank fee - recurring same amount",
+  "bank_format": "BOFA",
+  "expected": {
+    "match_count": 3,
+    "matches": [
+      {
+        "bank_idx": 0,
+        "dms_idx": 0,
+        "confidence_min": 70
+      },
+      {
+        "bank_idx": 1,
+        "dms_idx": 1,
+        "confidence_min": 70
+      },
+      {
+        "bank_idx": 2,
+        "dms_idx": 2,
+        "confidence_min": 70
+      }
+    ],
+    "note": "Date proximity should differentiate same-amount recurring fees",
+    "unmatched_bank": 0,
+    "unmatched_dms": 0
+  }
+}

@@ -1,0 +1,4 @@
+Item ID,Source,Original Period,Transaction Date,Description,Amount,Check/Reference,Type Code,Periods Outstanding,Notes
+1,BANK,2026-02,02/15/2026,CHECK #4450,-890.00,4450,CHK,1,Outstanding from February
+2,DMS,2026-02,02/20/2026,PENDING WIRE,15000.00,WIR-0220,WIR,1,Wire not yet received
+3,BANK,2026-01,01/28/2026,DEPOSIT,2500.00,,DEP,2,Unidentified deposit
