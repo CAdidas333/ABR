@@ -381,11 +381,12 @@ Public Function LoadDMSTransactions() As Collection
         Exit Function
     End If
 
+    Dim txn As clsTransaction
     Dim i As Long
     For i = 2 To lastRow
         If ws.Cells(i, COL_ROW_ID).Value = "" Then GoTo NextRowDMS
 
-        Dim txn As New clsTransaction
+        Set txn = New clsTransaction
         txn.TransactionID = CLng(ws.Cells(i, COL_ROW_ID).Value)
         txn.Source = "DMS"
         txn.TransactionDate = CDate(ws.Cells(i, COL_GL_DATE).Value)

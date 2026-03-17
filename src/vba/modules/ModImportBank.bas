@@ -606,11 +606,12 @@ Public Function LoadBankTransactions() As Collection
         Exit Function
     End If
 
+    Dim txn As clsTransaction
     Dim i As Long
     For i = 2 To lastRow
         If ws.Cells(i, COL_ROW_ID).Value = "" Then GoTo NextRow
 
-        Dim txn As New clsTransaction
+        Set txn = New clsTransaction
         txn.TransactionID = CLng(ws.Cells(i, COL_ROW_ID).Value)
         txn.Source = "BANK"
         txn.TransactionDate = CDate(ws.Cells(i, COL_TXN_DATE).Value)
