@@ -111,6 +111,10 @@ Public Sub AcceptMatch(ByVal matchID As Long)
     wsRecon.Cells(nextReconRow, 12).Value = Now
     wsRecon.Cells(nextReconRow, 12).NumberFormat = "MM/DD/YYYY HH:MM:SS"
     wsRecon.Cells(nextReconRow, 13).Value = ModHelpers.GetCurrentUserName()
+    ' Preserve audit trail: amount diff, date diff, check# match, score breakdown
+    wsRecon.Cells(nextReconRow, 14).Value = wsStaged.Cells(matchRow, COL_AMOUNT_DIFF).Value
+    wsRecon.Cells(nextReconRow, 15).Value = wsStaged.Cells(matchRow, COL_CHECK_MATCH).Value
+    wsRecon.Cells(nextReconRow, 16).Value = wsStaged.Cells(matchRow, COL_BREAKDOWN).Value
 
     ' Update staged status
     wsStaged.Cells(matchRow, COL_STATUS).Value = "ACCEPTED"

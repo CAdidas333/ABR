@@ -89,7 +89,12 @@ NextBankCandidate:
         Set subsets = FindSubsetSum(bankCandidates, dmsTxn.Amount, _
                                     tolerance, maxFragments, timeoutSec)
 
-        ' Process found subsets
+        ' Find the best-scoring subset (only stage one per DMS target)
+        Dim bestSubset As Collection
+        Set bestSubset = Nothing
+        Dim bestConfidence As Double
+        bestConfidence = -1
+
         Dim k As Long
         For k = 1 To subsets.Count
             Dim subset As Collection
@@ -98,20 +103,26 @@ NextBankCandidate:
             Dim confidence As Double
             confidence = ScoreCVRGroup(subset, dmsTxn, tolerance)
 
-            If confidence < ModConfig.LowConfidenceThreshold() Then GoTo NextSubset
+            If confidence >= ModConfig.LowConfidenceThreshold() Then
+                If confidence > bestConfidence Then
+                    bestConfidence = confidence
+                    Set bestSubset = subset
+                End If
+            End If
+        Next k
 
-            ' Build match result
+        ' Stage only the best subset
+        If Not bestSubset Is Nothing Then
             Dim result As New clsMatchResult
             result.MatchID = nextMatchID
             nextMatchID = nextMatchID + 1
             result.MatchType = "MANY_TO_ONE_BANK"
-            result.ConfidenceScore = confidence
+            result.ConfidenceScore = bestConfidence
             result.DMSTransactionIDs = CStr(dmsTxn.TransactionID)
             result.DMSAmount = dmsTxn.Amount
             result.DMSDescription = dmsTxn.Description
             result.DMSDate = dmsTxn.TransactionDate
 
-            ' Build bank IDs and calculate sum
             Dim bankIDs As String
             bankIDs = ""
             Dim groupSum As Currency
@@ -121,8 +132,8 @@ NextBankCandidate:
             Dim frag As clsTransaction
 
             Dim m As Long
-            For m = 1 To subset.Count
-                Set frag = subset(m)
+            For m = 1 To bestSubset.Count
+                Set frag = bestSubset(m)
                 If bankIDs <> "" Then bankIDs = bankIDs & ","
                 bankIDs = bankIDs & CStr(frag.TransactionID)
                 groupSum = groupSum + frag.Amount
@@ -134,19 +145,16 @@ NextBankCandidate:
             result.BankAmount = groupSum
             result.BankDescription = "CVR Group: " & desc
             result.AmountDifference = groupSum - dmsTxn.Amount
-            result.ScoreBreakdown = "CVR group: " & subset.Count & " fragments, " & _
+            result.ScoreBreakdown = "CVR group: " & bestSubset.Count & " fragments, " & _
                 "sum=" & Format(groupSum, "$#,##0.00") & " vs target=" & _
-                Format(dmsTxn.Amount, "$#,##0.00")
+                Format(dmsTxn.Amount, "$#,##0.00") & _
+                ", best of " & subsets.Count & " candidate groups"
 
-            ' Stage the match
             ModStagingManager.StageMatch result
-
-            ' Log
-            ModAuditTrail.LogCVRGroup result.MatchID, subset.Count, groupSum
+            ModAuditTrail.LogCVRGroup result.MatchID, bestSubset.Count, groupSum
             ModAuditTrail.LogMatchProposed result.MatchID, result.MatchType, _
-                confidence, result.BankDescription, dmsTxn.Description
-NextSubset:
-        Next k
+                bestConfidence, result.BankDescription, dmsTxn.Description
+        End If
 
         Set bankCandidates = Nothing
 NextDMSCVR:
@@ -213,6 +221,12 @@ NextDMSCandidate:
                                     ModConfig.MaxCVRFragments(), _
                                     ModConfig.CVRTimeoutSeconds())
 
+        ' Find the best-scoring subset (only stage one per bank transaction)
+        Dim bestSubset As Collection
+        Set bestSubset = Nothing
+        Dim bestConfidence As Double
+        bestConfidence = -1
+
         Dim k As Long
         For k = 1 To subsets.Count
             Dim subset As Collection
@@ -221,13 +235,21 @@ NextDMSCandidate:
             Dim confidence As Double
             confidence = ScoreCVRGroup(subset, bankTxn, tolerance)
 
-            If confidence < ModConfig.LowConfidenceThreshold() Then GoTo NextSubsetSplit
+            If confidence >= ModConfig.LowConfidenceThreshold() Then
+                If confidence > bestConfidence Then
+                    bestConfidence = confidence
+                    Set bestSubset = subset
+                End If
+            End If
+        Next k
 
+        ' Stage only the best subset
+        If Not bestSubset Is Nothing Then
             Dim result As New clsMatchResult
             result.MatchID = nextMatchID
             nextMatchID = nextMatchID + 1
             result.MatchType = "MANY_TO_ONE_DMS"
-            result.ConfidenceScore = confidence
+            result.ConfidenceScore = bestConfidence
             result.BankTransactionIDs = CStr(bankTxn.TransactionID)
             result.BankAmount = bankTxn.Amount
             result.BankDescription = bankTxn.Description
@@ -242,8 +264,8 @@ NextDMSCandidate:
             Dim frag As clsTransaction
 
             Dim m As Long
-            For m = 1 To subset.Count
-                Set frag = subset(m)
+            For m = 1 To bestSubset.Count
+                Set frag = bestSubset(m)
                 If dmsIDs <> "" Then dmsIDs = dmsIDs & ","
                 dmsIDs = dmsIDs & CStr(frag.TransactionID)
                 groupSum = groupSum + frag.Amount
@@ -255,13 +277,13 @@ NextDMSCandidate:
             result.DMSAmount = groupSum
             result.DMSDescription = "Split: " & desc
             result.AmountDifference = groupSum - bankTxn.Amount
-            result.ScoreBreakdown = "Reverse split: " & subset.Count & " DMS entries"
+            result.ScoreBreakdown = "Reverse split: " & bestSubset.Count & _
+                " DMS entries, best of " & subsets.Count & " candidate groups"
 
             ModStagingManager.StageMatch result
             ModAuditTrail.LogMatchProposed result.MatchID, result.MatchType, _
-                confidence, bankTxn.Description, result.DMSDescription
-NextSubsetSplit:
-        Next k
+                bestConfidence, bankTxn.Description, result.DMSDescription
+        End If
 
         Set dmsCandidates = Nothing
 NextBankSplit:
