@@ -158,6 +158,7 @@ Private Function RunPassRuleCheckNumber(ByVal bankTxns As Collection, _
     Dim matchCount As Long
     matchCount = 0
 
+    Dim result As clsMatchResult
     Dim bankTxn As clsTransaction
     Dim dmsTxn As clsTransaction
     Dim b As Long, d As Long
@@ -192,7 +193,7 @@ Private Function RunPassRuleCheckNumber(ByVal bankTxns As Collection, _
             Dim daysDiff As Long
             daysDiff = Abs(DateDiff("d", bankTxn.TransactionDate, dmsTxn.TransactionDate))
 
-            Dim result As New clsMatchResult
+            Set result = New clsMatchResult
             result.MatchID = matchID
             matchID = matchID + 1
             result.BankTransactionIDs = CStr(bankTxn.TransactionID)
@@ -253,6 +254,7 @@ Private Function RunPassRuleUniqueAmount(ByVal bankTxns As Collection, _
     Dim matchCount As Long
     matchCount = 0
 
+    Dim result As clsMatchResult
     Dim bankTxn As clsTransaction
     Dim dmsTxn As clsTransaction
     Dim b As Long, d As Long
@@ -305,7 +307,7 @@ NextDMSR1Count:
                     " (1 of 1 candidate) + " & daysDiff & "d gap (no date corroboration) -> 85%"
             End If
 
-            Dim result As New clsMatchResult
+            Set result = New clsMatchResult
             result.MatchID = matchID
             matchID = matchID + 1
             result.BankTransactionIDs = CStr(bankTxn.TransactionID)
@@ -363,6 +365,7 @@ Private Function RunScoredMatching(ByVal bankTxns As Collection, _
 
     ' Generate all exact-amount candidate pairs
     Dim candidates As New Collection
+    Dim result As clsMatchResult
     Dim bankTxn As clsTransaction
     Dim dmsTxn As clsTransaction
     Dim b As Long, d As Long
@@ -407,7 +410,7 @@ Private Function RunScoredMatching(ByVal bankTxns As Collection, _
             Dim pairScore As Double
             pairScore = dateScore * 0.7 + descSim * 0.3
 
-            Dim result As New clsMatchResult
+            Set result = New clsMatchResult
             result.BankTransactionIDs = CStr(bankTxn.TransactionID)
             result.DMSTransactionIDs = CStr(dmsTxn.TransactionID)
             result.ConfidenceScore = pairScore   ' Raw score for sorting
@@ -545,6 +548,7 @@ Private Function RunNearAmountMatching(ByVal bankTxns As Collection, _
     Dim matchCount As Long
     matchCount = 0
 
+    Dim result As clsMatchResult
     Dim bankTxn As clsTransaction
     Dim dmsTxn As clsTransaction
     Dim b As Long, d As Long
@@ -582,7 +586,7 @@ NextDMSP4:
         Next d
 
         If Not bestCandidate Is Nothing Then
-            Dim result As New clsMatchResult
+            Set result = New clsMatchResult
             result.MatchID = matchID
             matchID = matchID + 1
             result.BankTransactionIDs = CStr(bankTxn.TransactionID)
