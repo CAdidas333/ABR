@@ -1,0 +1,24 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Office temp files
+~$*.xlsx
+~$*.xlsm
+~$*.xls
+
+# Real data (never commit client financial data)
+Toy May 25/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Claude Code internal
+.claude/
