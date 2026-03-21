@@ -5,14 +5,10 @@ Attribute VB_Name = "ModImportBank"
 ' Parsers for Bank of America and Truist CSV export formats.
 ' Auto-detects format by reading the first row.
 '
-' Bank of America format is a sectioned CSV (no header row):
-'   Row 1: "Statement Information,..." — skip
-'   Row 2: "Account Summary,..." — skip
-'   Rows 3+: Transaction rows in sections:
-'     - "Deposits and other credits"  (positive amounts)
-'     - "Withdrawals and other Debits" (negative amounts)
-'     - "Checks" (negative amounts, D-Mon date format, check number field)
-'     - "Daily Ledger Balances" — skip entirely
+' Three supported formats:
+'   BOFA_SECTIONED: BofA sectioned CSV (no header row, section markers)
+'   BOFA_BAI:       BofA flat columnar CSV with BAI codes and header row
+'   TRUIST:         Truist CSV with Debit/Credit columns
 '
 ' Writes parsed transactions to the BankData sheet.
 '===============================================================================
@@ -35,6 +31,7 @@ Private Const COL_IS_MATCHED As Long = 10
 Private Const COL_MATCH_ID As Long = 11
 Private Const COL_MATCH_TYPE As Long = 12
 Private Const COL_CONFIDENCE As Long = 13
+Private Const COL_RECONC_ITEM As Long = 14  ' "SWEEP", "SECURITIES", or "" — reconciling items excluded from matching
 
 ' Section type constants for BofA sectioned CSV
 Private Const SEC_STMT_INFO As String = "statement information"
@@ -71,6 +68,8 @@ Public Function ImportBankStatement(Optional ByVal filePath As String = "") As L
     Select Case bankFormat
         Case "BOFA"
             txnCount = ParseBankOfAmerica(filePath)
+        Case "BOFA_BAI"
+            txnCount = ParseBofABAI(filePath)
         Case "TRUIST"
             txnCount = ParseTruist(filePath)
         Case Else
@@ -93,8 +92,9 @@ End Function
 
 Public Function DetectBankFormat(ByVal filePath As String) As String
     ' Auto-detect bank CSV format by reading the first row.
-    ' BofA sectioned CSV starts with "Statement Information,..."
-    ' Truist has a header row with Debit/Credit columns.
+    '   BofA sectioned: starts with "Statement Information,..."
+    '   BofA BAI flat:  header contains "BAI Code"
+    '   Truist:         header has Debit/Credit columns (but not BAI Code)
     Dim fileNum As Integer
     fileNum = FreeFile
     Open filePath For Input As #fileNum
@@ -109,6 +109,10 @@ Public Function DetectBankFormat(ByVal filePath As String) As String
     ' BofA sectioned format: first line starts with "Statement Information"
     If Left(headerLower, Len(SEC_STMT_INFO)) = SEC_STMT_INFO Then
         DetectBankFormat = "BOFA"
+    ' BofA BAI flat columnar format: header contains "bai code"
+    ' Must check BEFORE Truist because BAI header also contains "debit/credit"
+    ElseIf InStr(headerLower, "bai code") > 0 Then
+        DetectBankFormat = "BOFA_BAI"
     ElseIf InStr(headerLower, "debit") > 0 And InStr(headerLower, "credit") > 0 Then
         DetectBankFormat = "TRUIST"
     Else
@@ -258,7 +262,7 @@ Private Function ParseBankOfAmerica(ByVal filePath As String) As Long
         ws.Cells(startRow, COL_BALANCE).Value = ""  ' Sectioned CSV has no per-txn running balance
         ws.Cells(startRow, COL_BANK_SRC).Value = "BOFA"
         ws.Cells(startRow, COL_IMPORT_TS).Value = importTimestamp
-        ws.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+        ws.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY h:mm:ss"
         ws.Cells(startRow, COL_IS_MATCHED).Value = False
 
         rowID = rowID + 1
@@ -433,6 +437,211 @@ Private Function StripAsterisk(ByVal checkNum As String) As String
 End Function
 
 ' ---------------------------------------------------------------------------
+' Bank of America Parser — BAI Flat Columnar CSV Format
+' ---------------------------------------------------------------------------
+
+Private Function ParseBofABAI(ByVal filePath As String) As Long
+    ' Parse BofA BAI flat columnar CSV (e.g., Honda Feb 2026).
+    '
+    ' 14 columns with header row:
+    '   0: Account Name         7: Customer Reference (check# for BAI 475)
+    '   1: Account Number       8: Debit/Credit
+    '   2: Amount (pre-signed)  9: As of Date (MM/DD/YY)
+    '   3: BAI Code            10: Status
+    '   4: ABA (Bank ID)       11: Transaction Description
+    '   5: Bank Reference      12: Transaction Detail
+    '   6: Currency            13: Type
+    '
+    ' Amount is already signed (negative = debit). Check numbers are in
+    ' Customer Reference (col 7) only when BAI Code = 475.
+
+    ' BAI column indices (0-based from ParseCSVLine)
+    Const BAI_COL_AMOUNT As Long = 2
+    Const BAI_COL_CODE As Long = 3
+    Const BAI_COL_CUST_REF As Long = 7
+    Const BAI_COL_DATE As Long = 9
+    Const BAI_COL_DESC As Long = 11
+    Const BAI_COL_DETAIL As Long = 12
+    Const BAI_COL_TYPE As Long = 13
+    Const BAI_MIN_FIELDS As Long = 12  ' Must have at least through Description
+
+    Dim ws As Worksheet
+    Set ws = ThisWorkbook.Sheets(BANK_SHEET)
+
+    Dim startRow As Long
+    startRow = ModHelpers.GetNextRow(ws, COL_ROW_ID)
+
+    Dim fileNum As Integer
+    fileNum = FreeFile
+    Open filePath For Input As #fileNum
+
+    ' Skip header row
+    Dim headerLine As String
+    Line Input #fileNum, headerLine
+
+    Dim rowID As Long
+    If startRow <= 2 Then
+        rowID = 1
+    Else
+        rowID = ws.Cells(startRow - 1, COL_ROW_ID).Value + 1
+    End If
+
+    Dim txnCount As Long
+    txnCount = 0
+
+    Dim importTimestamp As Date
+    importTimestamp = Now
+
+    Do While Not EOF(fileNum)
+        Dim dataLine As String
+        Line Input #fileNum, dataLine
+
+        If Trim(dataLine) = "" Then GoTo NextBAILine
+
+        Dim fields() As String
+        fields = ParseCSVLine(dataLine)
+
+        If UBound(fields) < BAI_MIN_FIELDS Then GoTo NextBAILine
+
+        ' --- Parse fields ---
+        Dim txnDate As Date
+        Dim desc As String
+        Dim amount As Currency
+        Dim checkNum As String
+        Dim baiCode As String
+        Dim txnType As String
+
+        On Error GoTo SkipBAILine
+
+        ' Date: MM/DD/YY format (2-digit year)
+        txnDate = ParseDateMMDDYY(Trim(fields(BAI_COL_DATE)))
+
+        ' Amount: pre-signed, no commas (e.g., "-388.42", "103943.6")
+        amount = CCur(Trim(fields(BAI_COL_AMOUNT)))
+
+        ' BAI Code and transaction type
+        baiCode = Trim(fields(BAI_COL_CODE))
+        If UBound(fields) >= BAI_COL_TYPE Then
+            txnType = Trim(fields(BAI_COL_TYPE))
+        Else
+            txnType = ""
+        End If
+
+        ' Description: use Transaction Description (col 11)
+        desc = CleanCSVField(fields(BAI_COL_DESC))
+        ' Append Type category if available and different from desc
+        If txnType <> "" And UCase(txnType) <> UCase(desc) Then
+            desc = desc & " - " & txnType
+        End If
+
+        ' Check number: Customer Reference (col 7), only for BAI 475 (checks)
+        checkNum = ""
+        If baiCode = "475" Then
+            Dim custRef As String
+            custRef = Trim(fields(BAI_COL_CUST_REF))
+            ' Validate: must be numeric and non-zero
+            If custRef <> "" And custRef <> "0" Then
+                If IsNumericString(custRef) Then
+                    checkNum = custRef
+                End If
+            End If
+        End If
+
+        On Error GoTo 0
+
+        ' Write to sheet
+        ws.Cells(startRow, COL_ROW_ID).Value = rowID
+        ws.Cells(startRow, COL_TXN_DATE).Value = txnDate
+        ws.Cells(startRow, COL_TXN_DATE).NumberFormat = "MM/DD/YYYY"
+        ws.Cells(startRow, COL_POST_DATE).Value = txnDate
+        ws.Cells(startRow, COL_POST_DATE).NumberFormat = "MM/DD/YYYY"
+        ws.Cells(startRow, COL_DESC).Value = desc
+        ws.Cells(startRow, COL_AMOUNT).Value = amount
+        ws.Cells(startRow, COL_AMOUNT).NumberFormat = "#,##0.00"
+        ws.Cells(startRow, COL_CHECK_NUM).Value = checkNum
+        ws.Cells(startRow, COL_BALANCE).Value = ""  ' BAI format has no per-txn balance
+        ws.Cells(startRow, COL_BANK_SRC).Value = "BOFA"
+        ws.Cells(startRow, COL_IMPORT_TS).Value = importTimestamp
+        ws.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY h:mm:ss"
+        ws.Cells(startRow, COL_IS_MATCHED).Value = False
+
+        ' Flag reconciling items: sweep transfers (BAI 501) and securities (BAI 233)
+        ' These are bank-side internal cash management transactions with no GL counterpart
+        If baiCode = "501" Then
+            ws.Cells(startRow, COL_RECONC_ITEM).Value = "SWEEP"
+        ElseIf baiCode = "233" Then
+            ws.Cells(startRow, COL_RECONC_ITEM).Value = "SECURITIES"
+        End If
+
+        rowID = rowID + 1
+        startRow = startRow + 1
+        txnCount = txnCount + 1
+        GoTo NextBAILine
+
+SkipBAILine:
+        On Error GoTo 0
+
+NextBAILine:
+    Loop
+
+    Close #fileNum
+    ParseBofABAI = txnCount
+End Function
+
+' ---------------------------------------------------------------------------
+' BAI Helper: Parse MM/DD/YY Date (2-digit year)
+' ---------------------------------------------------------------------------
+
+Private Function ParseDateMMDDYY(ByVal dateStr As String) As Date
+    ' Parse a date in MM/DD/YY format (e.g., "02/27/26").
+    ' VBA CDate handles 2-digit years (00-29 = 2000-2029), but we parse
+    ' explicitly to avoid locale-dependent interpretation.
+    Dim parts() As String
+    parts = Split(dateStr, "/")
+    If UBound(parts) = 2 Then
+        Dim m As Long, d As Long, y As Long
+        m = CLng(Trim(parts(0)))
+        d = CLng(Trim(parts(1)))
+        y = CLng(Trim(parts(2)))
+        ' Convert 2-digit year: 00-49 = 2000-2049, 50-99 = 1950-1999
+        If y < 100 Then
+            If y < 50 Then
+                y = 2000 + y
+            Else
+                y = 1900 + y
+            End If
+        End If
+        ParseDateMMDDYY = DateSerial(y, m, d)
+    Else
+        ' Fallback to VBA parser
+        ParseDateMMDDYY = CDate(dateStr)
+    End If
+End Function
+
+' ---------------------------------------------------------------------------
+' BAI Helper: Check if string is all digits
+' ---------------------------------------------------------------------------
+
+Private Function IsNumericString(ByVal s As String) As Boolean
+    ' Returns True if s contains only digits (0-9). No signs, no decimals.
+    ' Used to validate check numbers in Customer Reference field.
+    If Len(s) = 0 Then
+        IsNumericString = False
+        Exit Function
+    End If
+    Dim i As Long
+    For i = 1 To Len(s)
+        Dim ch As String
+        ch = Mid(s, i, 1)
+        If ch < "0" Or ch > "9" Then
+            IsNumericString = False
+            Exit Function
+        End If
+    Next i
+    IsNumericString = True
+End Function
+
+' ---------------------------------------------------------------------------
 ' Truist Parser
 ' ---------------------------------------------------------------------------
 
@@ -520,7 +729,7 @@ Private Function ParseTruist(ByVal filePath As String) As Long
         ws.Cells(startRow, COL_BALANCE).NumberFormat = "#,##0.00"
         ws.Cells(startRow, COL_BANK_SRC).Value = "TRUIST"
         ws.Cells(startRow, COL_IMPORT_TS).Value = importTimestamp
-        ws.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+        ws.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY h:mm:ss"
         ws.Cells(startRow, COL_IS_MATCHED).Value = False
 
         rowID = rowID + 1
@@ -622,6 +831,11 @@ Public Function LoadBankTransactions() As Collection
         txn.IsMatched = CBool(ws.Cells(i, COL_IS_MATCHED).Value)
         txn.SheetRow = i
 
+        ' Read reconciling item flag (SWEEP, SECURITIES, or "")
+        If Not IsEmpty(ws.Cells(i, COL_RECONC_ITEM).Value) Then
+            txn.ReconcItem = CStr(ws.Cells(i, COL_RECONC_ITEM).Value)
+        End If
+
         If Not IsEmpty(ws.Cells(i, COL_MATCH_ID).Value) Then
             If ws.Cells(i, COL_MATCH_ID).Value <> "" Then
                 txn.MatchID = CLng(ws.Cells(i, COL_MATCH_ID).Value)
@@ -678,3 +892,62 @@ Public Sub ClearBankMatchStatus(ByVal txnID As Long)
         End If
     Next i
 End Sub
+
+' ---------------------------------------------------------------------------
+' Import Outstanding Checks from Bank Reconciliation
+' ---------------------------------------------------------------------------
+
+Public Function ImportOutstandingChecks(ByVal filePath As String) As Long
+    ' Import outstanding checks from a bank reconciliation XLSX file.
+    '
+    ' Purpose: Load prior-period outstanding checks so the matching engine
+    ' can match bank checks that cleared this month but were posted to GL
+    ' in a month before our available GL data window (Phase 5 matching).
+    '
+    ' The bank rec format varies by location.  Honda uses an "OS CKS" sheet
+    ' with a sparse layout:
+    '   Column A: Year (sparse — only populated when year changes)
+    '   Column B: Month (sparse — only populated when month changes)
+    '   Column C: Check number
+    '   Column F: Amount (positive; we negate to represent outflows)
+    '   Column H: Payee name
+    '
+    ' Other locations may use a different format (standalone outstanding
+    ' checks export with columns: Check# | Bank Code | Check Date | Amount |
+    ' Payee | Cancel Date).  This function should detect and handle both.
+    '
+    ' Data is written to an OutstandingChecks sheet with columns:
+    '   RowID | CheckNumber | Amount | Payee | Source ("OUTSTANDING")
+    '
+    ' Matching logic (in ModMatching):
+    '   - After all other matching phases, take remaining unmatched bank checks
+    '   - For each, search outstanding checks by check# + exact amount
+    '   - If found: match at 100% confidence, type = "PRIOR_OUTSTANDING"
+    '
+    ' IMPORTANT: The outstanding list should be from the PRIOR month's bank
+    ' rec (e.g., January rec for February reconciliation).  The current
+    ' month's outstanding list shows checks that HAVEN'T cleared yet —
+    ' those are useful for validating unmatched DMS items, but not for
+    ' matching against bank checks.
+    '
+    ' Parameters:
+    '   filePath — Full path to the bank reconciliation XLSX file
+    '
+    ' Returns:
+    '   Number of outstanding checks imported
+    '
+    ' Usage from Immediate Window:
+    '   ? ModImportBank.ImportOutstandingChecks("C:\path\to\HONDA BANK REC 0126.xlsx")
+    '
+    ' TODO: Implement full parser.  For now this is a stub — the Honda rec
+    '       format has been validated in the Python reference implementation
+    '       (parse_outstanding_from_rec in matching_engine.py).
+    '       Key implementation notes:
+    '         - Do NOT use Dim As New inside the row loop
+    '         - Skip rows where Column C is empty (blank/separator rows)
+    '         - Last row in the sheet is typically a total row (no check#) — skip it
+    '         - Amount in column F is positive; negate it (outflows are negative)
+    '         - Use openpyxl-equivalent XLSX reading via Excel Workbooks.Open
+
+    ImportOutstandingChecks = 0  ' Stub — not yet implemented
+End Function

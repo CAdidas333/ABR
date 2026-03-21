@@ -37,6 +37,30 @@ Public Sub RunMatching(ByVal bankTxns As Collection, ByVal dmsTxns As Collection
     Dim matchID As Long
     matchID = ModStagingManager.GetNextMatchID()
 
+    ' Filter out reconciling items (sweep transfers, securities) — they have
+    ' no GL counterpart and must never enter the matching pool
+    Dim matchableBankTxns As New Collection
+    Dim reconcItemCount As Long
+    reconcItemCount = 0
+    Dim tmpTxn As clsTransaction
+    Dim idx As Long
+    For idx = 1 To bankTxns.Count
+        Set tmpTxn = bankTxns(idx)
+        If tmpTxn.ReconcItem = "" Then
+            matchableBankTxns.Add tmpTxn
+        Else
+            reconcItemCount = reconcItemCount + 1
+        End If
+    Next idx
+
+    If reconcItemCount > 0 Then
+        ModAuditTrail.LogEvent "RECONC_ITEMS", _
+            reconcItemCount & " bank reconciling items excluded from matching (sweep/securities)"
+    End If
+
+    ' Use matchable bank transactions for all phases
+    Set bankTxns = matchableBankTxns
+
     ' Track which transactions are assigned in this run
     Dim assignedBankIDs As New Collection
     Dim assignedDMSIDs As New Collection
@@ -287,6 +311,14 @@ NextDMSR1Count:
 
         ' Exactly 1 candidate at this exact amount
         If candidateCount = 1 Then
+            ' Outstanding deposit guard: BATCH deposits clear in 1-2 days.
+            ' If DMS deposit date is >3 days after bank date, skip — likely outstanding.
+            If lastCandidate.TypeCode = "BATCH" Then
+                If lastCandidate.TransactionDate > DateAdd("d", 3, bankTxn.TransactionDate) Then
+                    GoTo NextBankR1
+                End If
+            End If
+
             Dim daysDiff As Long
             daysDiff = Abs(DateDiff("d", bankTxn.TransactionDate, _
                                     lastCandidate.TransactionDate))
@@ -383,6 +415,26 @@ Private Function RunScoredMatching(ByVal bankTxns As Collection, _
 
             ' Must be exact amount match
             If bankTxn.Amount <> dmsTxn.Amount Then GoTo NextDMSP1
+
+            ' Outstanding deposit guard (same as Phase 0 Rule 1)
+            If dmsTxn.TypeCode = "BATCH" Then
+                If dmsTxn.TransactionDate > DateAdd("d", 3, bankTxn.TransactionDate) Then
+                    GoTo NextDMSP1
+                End If
+            End If
+
+            ' Check number veto: if both sides have check numbers and they
+            ' differ, this is almost certainly a wrong match — skip the pair
+            If bankTxn.CheckNumber <> "" Then
+                Dim dmsChkP1 As String
+                dmsChkP1 = dmsTxn.CheckNumber
+                If dmsTxn.TypeCode = "CHK" And dmsChkP1 = "" Then
+                    dmsChkP1 = dmsTxn.ReferenceNumber
+                End If
+                If dmsChkP1 <> "" And bankTxn.CheckNumber <> dmsChkP1 Then
+                    GoTo NextDMSP1
+                End If
+            End If
 
             ' Score this pair for discrimination
             Dim daysDiff As Long

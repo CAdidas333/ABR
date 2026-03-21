@@ -26,7 +26,8 @@
         {"header": "Is Matched", "width": 10, "format": "boolean"},
         {"header": "Match ID", "width": 10, "format": "integer"},
         {"header": "Match Type", "width": 16, "format": "text"},
-        {"header": "Confidence", "width": 12, "format": "percent"}
+        {"header": "Confidence", "width": 12, "format": "percent"},
+        {"header": "Reconc Item", "width": 14, "format": "text"}
       ]
     },
     "DMSData": {

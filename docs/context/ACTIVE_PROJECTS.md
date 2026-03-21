@@ -1,5 +1,5 @@
 # ABR — Active Projects
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-20*
 *Living document -- updated each session*
 
 ---
@@ -21,13 +21,22 @@
 - [x] Tested on real Toyota May 2025 data: 95.7% match rate, $0.00 net diff
 - [x] GitHub repo created and pushed (https://github.com/CAdidas333/ABR)
 - [x] Documentation (README, CLAUDE.md, context docs)
+- [x] BofA BAI flat columnar CSV parser (Honda format — 14 columns with BAI codes)
+- [x] Tested on real Honda Feb 2026 data: 95.7% match rate, 90.3% auto-accept
+- [x] Sweep/securities exclusion (BAI 501/233 → reconciling items)
+- [x] Outstanding deposit protection (BATCH date guard)
+- [x] Phase 1 check-number veto (prevents false matches on duplicate amounts)
+- [x] Prior outstanding checks parser for bank rec format
+- [x] Multi-agent QA: verified all 6 outstanding deposits, 0 false positives
 
 ### What's Next
+- [ ] Get January 2026 Honda bank rec from Jay (to match 18 prior-period checks)
 - [ ] Wire up UserForms (frmDashboard, frmMatchReview, frmManualMatch, frmCVRGrouping)
+- [ ] Improve Phase -1 reversal detection (AHM ACH pairs with same ref not caught)
 - [ ] Parse ARP returned check numbers from description text
 - [ ] Add mixed-sign CVR fragment support (Worldpay net-of-fee deposits)
-- [ ] Review the 17 staged items and 34 unmatched from Toyota May 2025
-- [ ] Test with a second location (different store, different transaction patterns)
+- [ ] Handle Truist floorplan sweep transfers as reconciling items
+- [ ] Test with a third location
 - [ ] Build the automated workbook generator (build script)
 
 ### How to Run/Test

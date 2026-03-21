@@ -68,7 +68,7 @@ Public Sub StageMatch(ByVal match As clsMatchResult)
     ws.Cells(nextRow, COL_BREAKDOWN).Value = match.ScoreBreakdown
     ws.Cells(nextRow, COL_STATUS).Value = "STAGED"
     ws.Cells(nextRow, COL_ACTION_TS).Value = Now
-    ws.Cells(nextRow, COL_ACTION_TS).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+    ws.Cells(nextRow, COL_ACTION_TS).NumberFormat = "MM/DD/YYYY h:mm:ss"
 End Sub
 
 ' ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ Public Sub AcceptMatch(ByVal matchID As Long)
     wsRecon.Cells(nextReconRow, 11).Value = wsStaged.Cells(matchRow, COL_DMS_AMOUNT).Value
     wsRecon.Cells(nextReconRow, 11).NumberFormat = "#,##0.00"
     wsRecon.Cells(nextReconRow, 12).Value = Now
-    wsRecon.Cells(nextReconRow, 12).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+    wsRecon.Cells(nextReconRow, 12).NumberFormat = "MM/DD/YYYY h:mm:ss"
     wsRecon.Cells(nextReconRow, 13).Value = ModHelpers.GetCurrentUserName()
     ' Preserve audit trail: amount diff, date diff, check# match, score breakdown
     wsRecon.Cells(nextReconRow, 14).Value = wsStaged.Cells(matchRow, COL_AMOUNT_DIFF).Value
@@ -305,7 +305,7 @@ Public Function CreateManualMatch(ByVal bankTxnID As Long, _
     wsRecon.Cells(nextRow, 11).Value = dmsTxn.Amount
     wsRecon.Cells(nextRow, 11).NumberFormat = "#,##0.00"
     wsRecon.Cells(nextRow, 12).Value = Now
-    wsRecon.Cells(nextRow, 12).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+    wsRecon.Cells(nextRow, 12).NumberFormat = "MM/DD/YYYY h:mm:ss"
     wsRecon.Cells(nextRow, 13).Value = ModHelpers.GetCurrentUserName()
 
     ' Update source sheets

@@ -3,6 +3,59 @@
 
 ---
 
+## Session: 2026-03-20 — Honda Feb 2026 Testing and Multi-Agent QA
+
+**Focus:** Tested matching engine against Honda Feb 2026 real data (second location). Built new bank parser, ran multi-agent QA/accounting/code review, implemented three fixes.
+
+**What We Built/Changed:**
+- New `ParseBofABAI` parser for BofA BAI flat columnar CSV (14-column format with BAI codes)
+- Format auto-detection updated: BOFA sectioned vs BOFA_BAI vs TRUIST
+- Python reference implementation updated to pass-rule architecture (was still using old weighted scoring)
+- Sweep/securities exclusion: BAI 501/233 filtered from matching pool as reconciling items
+- Outstanding deposit protection: BATCH deposits can't match bank txns >3 days earlier
+- Check-number veto in Phase 1: bank+DMS both have check# but they differ = skip
+- Prior outstanding checks import stub (VBA) + parser (Python) for bank rec format
+- Fixed timestamp format bug across 6 VBA modules (`HH:MM:SS` → `h:mm:ss`)
+- `is_reconciling_item` and `reconciling_type` fields added to Transaction dataclass
+
+**Honda Feb 2026 Results (Final):**
+- 556 bank transactions (538 matchable + 18 reconciling items excluded)
+- 500 matches / 538 matchable = **95.7% bank match rate**
+- 486/538 auto-accepted at 85%+ = **90.3% auto-accept rate**
+- 213 check# confirmed matches at 100% avg confidence
+- $0.07 net amount difference
+- All 6 outstanding deposits correctly unmatched (PASS)
+- 0 false positives on check-number mismatches (after Phase 1 veto fix)
+- 23 unmatched bank: 18 prior-period checks + 5 ACH (2 Truist sweeps + 3 other)
+- 154 unmatched DMS: 111 checks (73 on outstanding list) + 41 FINDEP + 2 BATCH deposits
+
+**Decisions Made:**
+- BAI format detection by "bai code" in header, checked before Truist (BAI header contains "debit/credit" which would false-match)
+- Sweep/securities are "reconciling items" excluded from matching (no GL counterpart)
+- BATCH deposits get a 3-day date guard to prevent false matches to earlier bank deposits
+- Phase 1 scored matching must veto pairs where both sides have different check numbers
+- BankSource stays "BOFA" for both sectioned and BAI formats (matching engine doesn't branch on it)
+
+**Bugs Fixed:**
+- Timestamp format `HH:MM:SS` showed month instead of minutes in all VBA modules (display bug)
+- Phase 1 scored matching produced 8 false positives by pairing bank checks with wrong DMS checks at same amount (fixed with check-number veto)
+- Outstanding deposits falsely matched when coincidentally same amount as earlier bank deposits (fixed with date guard)
+
+**Multi-Agent QA Findings:**
+- QA agent: verified all 207 check# matches, 232 unique amount matches, 3 near-amount matches; found the 8 Phase 1 false positives
+- Accounting agent: all 13 of Jay's outstanding journal entries map 1:1 to our FINDEP items; Phase -1 missed some AHM ACH self-canceling pairs; Truist FL DR&CR debits are floorplan sweep transfers
+- Senior dev: 18 findings, 0 actual critical bugs (check# stripping verified safe at DMS import), timestamp format bug confirmed, prior-period matching mutates input objects
+
+**Next Steps:**
+- Ask Jay for the January 2026 bank rec to match the 18 prior-period bank checks
+- Improve Phase -1 to catch AHM ACH self-canceling pairs (reference matching too strict)
+- Consider widening near-amount tolerance for ACH items ($0.03 Zurich mismatch)
+- Handle Truist FL DR&CR sweep transfers as reconciling items
+- Wire up UserForms
+- Test with a third location
+
+---
+
 ## Session: 2026-03-17 — Algorithm Redesign and Live Testing
 
 **Focus:** Rewrote the matching algorithm from weighted scoring to pass-rule architecture, debugged VBA issues, tested against real Toyota May 2025 data.

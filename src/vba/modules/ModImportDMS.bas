@@ -186,7 +186,7 @@ Private Function ParseDMSFile(ByVal filePath As String) As Long
         wsDest.Cells(startRow, COL_TYPE_CODE).Value = typeCode
         wsDest.Cells(startRow, COL_GL_ACCT).Value = portCode
         wsDest.Cells(startRow, COL_IMPORT_TS).Value = importTimestamp
-        wsDest.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+        wsDest.Cells(startRow, COL_IMPORT_TS).NumberFormat = "MM/DD/YYYY h:mm:ss"
         wsDest.Cells(startRow, COL_IS_MATCHED).Value = False
 
         rowID = rowID + 1

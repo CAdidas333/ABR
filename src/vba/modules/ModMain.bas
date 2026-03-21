@@ -418,7 +418,7 @@ Public Sub UpdateDashboardStats()
     End If
 
     ' Last session info
-    ws.Cells(statRow + 10, 3).Value = Format(Now, "MM/DD/YYYY HH:MM:SS")
+    ws.Cells(statRow + 10, 3).Value = Format(Now, "MM/DD/YYYY h:mm:ss")
     ws.Cells(statRow + 11, 3).Value = ModHelpers.GetCurrentUserName()
     ws.Cells(statRow + 12, 3).Value = ModConfig.GetConfigValue("CurrentMonth")
 

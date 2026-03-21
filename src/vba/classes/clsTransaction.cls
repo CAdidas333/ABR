@@ -24,6 +24,7 @@ Public MatchID As Long
 Public MatchType As String
 Public ConfidenceScore As Double
 Public SheetRow As Long         ' Row on source sheet for cross-reference
+Public ReconcItem As String     ' "SWEEP", "SECURITIES", or "" — bank-side reconciling items excluded from matching
 
 Private Sub Class_Initialize()
     TransactionID = 0
@@ -32,6 +33,7 @@ Private Sub Class_Initialize()
     MatchID = 0
     SheetRow = 0
     ConfidenceScore = 0
+    ReconcItem = ""
 End Sub
 
 Public Function Clone() As clsTransaction
@@ -52,6 +54,7 @@ Public Function Clone() As clsTransaction
     t.MatchType = Me.MatchType
     t.ConfidenceScore = Me.ConfidenceScore
     t.SheetRow = Me.SheetRow
+    t.ReconcItem = Me.ReconcItem
     Set Clone = t
 End Function
 

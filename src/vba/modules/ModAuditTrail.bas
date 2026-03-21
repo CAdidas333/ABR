@@ -79,7 +79,7 @@ Public Sub LogEvent(ByVal eventType As String, ByVal details As String, _
 
     ws.Cells(nextRow, COL_LOG_ID).Value = mNextLogID
     ws.Cells(nextRow, COL_TIMESTAMP).Value = Now
-    ws.Cells(nextRow, COL_TIMESTAMP).NumberFormat = "MM/DD/YYYY HH:MM:SS"
+    ws.Cells(nextRow, COL_TIMESTAMP).NumberFormat = "MM/DD/YYYY h:mm:ss"
     ws.Cells(nextRow, COL_USER).Value = ModHelpers.GetCurrentUserName()
     ws.Cells(nextRow, COL_LOCATION).Value = ModConfig.LocationName()
     ws.Cells(nextRow, COL_EVENT_TYPE).Value = eventType
