@@ -1,5 +1,5 @@
 # ABR (Auto Bank Reconciliation) — Master Context
-*Last updated: 2026-03-17*
+*Last updated: 2026-03-21*
 
 ---
 
@@ -131,12 +131,25 @@ ABR/
 - Business-day date conversion (WORKDAY.INTL equivalent)
 - Many-to-many matching (payroll = 1 bank ACH to 8-12 DMS entries)
 - Per-vendor fee tolerance configuration
-- Multi-location deployment (tested on Toyota only)
+- Multi-location deployment (tested on Toyota and Honda)
 - Power BI reporting layer (future state)
+- Local Flask web app (Option B — cleaner UI, product potential)
 
 ---
 
-## Performance (Toyota May 2025 Real Data)
+## Delivery Strategy (decided 2026-03-21)
+
+**Two parallel paths:**
+- **Option A: Excel/VBA** — for Windows deployment at stores. Controllers use Excel daily. Chris can drive UI polish. Production is always Windows (macOS sandbox issues are dev-only).
+- **Option B: Local web app (Flask/Python)** — cleaner UX, product potential. The original tool had paying clients at $1K+/year. Start local, potentially go hosted later.
+
+Both share the same Python matching engine (`tests/matching_engine.py`). VBA is a port for Excel delivery. The web app calls the Python engine directly.
+
+---
+
+## Performance
+
+### Toyota May 2025
 
 | Metric | Value |
 |--------|-------|
@@ -148,8 +161,18 @@ ABR/
 | Net difference | $0.00 |
 | False positives | 0 |
 
-Chris's manual approach: 98.1% match rate but 619 items (78.6%) needed manual review.
-Our tool: 95.7% match rate with only 17 items (2.2%) needing review.
+### Honda Feb 2026
+
+| Metric | Value |
+|--------|-------|
+| Bank transactions | 556 (538 matchable) |
+| Auto-accepted (85%+) | 486 (90.3%) |
+| Total matched | 500 (95.7% of matchable) |
+| Reconciling items excluded | 18 (sweeps/securities) |
+| Unmatched bank | 23 (18 prior-period + 5 ACH) |
+| Net difference | $0.07 |
+| False positives | 0 |
+| Outstanding deposits | 6/6 correctly unmatched |
 
 ---
 
